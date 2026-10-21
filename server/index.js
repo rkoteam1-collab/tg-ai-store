@@ -11,7 +11,7 @@ const store=createStore(path.resolve(config.DATA_DIR||path.join(root,'data')),pa
 const bot=config.BOT_TOKEN ? new Telegraf(config.BOT_TOKEN) : null;
 const telegramWebhook=bot&&config.BOT_ENABLED!=='false'&&config.BOT_TRANSPORT!=='polling'?bot.webhookCallback(TELEGRAM_WEBHOOK_PATH,{secretToken:webhookSecret(config.BOT_TOKEN)}):undefined;
 const app=createApp({config,store,telegram:bot?.telegram,distPath:path.join(root,'../dist'),telegramWebhook});
-const server=app.listen(Number(config.PORT||3000),'0.0.0.0',()=>console.log(`AI Store listening on ${config.PORT||3000}`));
+const server=app.listen(Number(config.PORT||3000),'0.0.0.0',()=>console.log(`AIshopify listening on ${config.PORT||3000}`));
 let shuttingDown=false;
 if (bot && config.BOT_ENABLED!=='false') {
   bot.use(menuRepairMiddleware(bot.telegram));

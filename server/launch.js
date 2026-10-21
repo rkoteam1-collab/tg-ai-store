@@ -1,4 +1,4 @@
-export const APP_RELEASE='20261021.3';
+export const APP_RELEASE='20261021.4';
 export const STATIC_ORIGIN='https://rkoteam1-collab.github.io';
 export function launchUrl(config={}){const url=new URL(config.FRONTEND_URL||'https://rkoteam1-collab.github.io/tg-ai-store/');url.searchParams.set('v',APP_RELEASE);return url.href;}
 export async function resetPersonalMenu(telegram,chatId){
@@ -22,5 +22,5 @@ export function menuRepairMiddleware(telegram){
  };
 }
 export function startStore(ctx,config={}){
- return ctx.reply('AI Store — каталог подписок и технических услуг. Поддержка: @MaximRkoTeam.',{reply_markup:{keyboard:[[{text:'Открыть магазин',web_app:{url:launchUrl(config)}}]],resize_keyboard:true,is_persistent:true}});
+ return ctx.reply('AIshopify — каталог подписок и технических услуг. Поддержка: @MaximRkoTeam.',{reply_markup:{keyboard:[[{text:'Открыть магазин',web_app:{url:launchUrl(config)}}]],resize_keyboard:true,is_persistent:true}});
 }
