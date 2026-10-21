@@ -13,6 +13,8 @@ export function useTelegram() {
       try {
         tg.ready();
         tg.expand();
+        tg.setHeaderColor?.('#ffffff');
+        tg.setBackgroundColor?.('#ffffff');
         // Enable closing confirmation to prevent accidental swipes
         if (tg.enableClosingConfirmation) {
           tg.enableClosingConfirmation();
@@ -41,12 +43,7 @@ export function useTelegram() {
     }
   };
 
-  const user = tg?.initDataUnsafe?.user || {
-    id: 99999999,
-    first_name: 'Пользователь',
-    username: 'ai_user',
-    is_premium: true
-  };
+  const user = tg?.initDataUnsafe?.user || { first_name: 'Гость' };
 
   const isTelegram = Boolean(tg && tg.initData);
 

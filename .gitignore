@@ -7,3 +7,9 @@ dist/
 swagger.json
 itpay_openapi.json
 mingit/
+server/data/orders.json
+server/data/channel_discounts.json
+server/data/promos.json
+server/data/*.tmp
+.env.*
+!.env.example

@@ -1,93 +1,22 @@
-# 🤖 Telegram Mini App — AI Store (Магазин ИИ-подписок)
+# TG-AI-STORE
 
-Премиальный интернет-магазин подписок на нейросети в формате **Telegram Mini App (TMA)** с витриной, корзиной, управлением остатками, скидками и панелью администратора.
+React + Express Telegram storefront. Node 24 recommended.
 
----
-
-## 🌟 Доступные нейросети и тарифы
-
-1. **Claude (Anthropic):**
-   - **Claude Pro** — Sonnet 3.5 & Opus 3.7, проекты, артефакты, контекст 200K.
-   - **Claude Max** — расширенная квота x10, приоритетные серверы, режим Deep Reasoning.
-2. **ChatGPT (OpenAI):**
-   - **ChatGPT Plus** — GPT-4o, o1, генератор фото DALL-E 3, холст Canvas, Advanced Voice.
-   - **ChatGPT Pro ($200 Tier)** — неограниченный o1 pro mode, максимальные вычисления.
-3. **Google Gemini:**
-   - **Gemini Advanced / Pro** — 1.5 Pro с контекстом 1 миллион токенов + 2 ТБ Google One.
-   - **Gemini Ultra** — гигантский контекст 2,000,000 токенов, агент Deep Research.
-4. **Moonshot Kimi:**
-   - **Kimi Pro** — скоростной веб-поиск и чтение документов до 200,000 знаков.
-   - **Kimi Max (k1.5)** — новейшая логическая модель рассуждений с контекстом 2M.
-
----
-
-## 🚀 Возможности приложения
-
-- 🛒 **Корзина покупок:**
-  - Добавление в корзину, регулирование количества (`+` / `-`), удаление позиций.
-  - Поддержка промокодов (`START` -10%, `AI2026` -15%, `VIPAI` -20%).
-  - Подсчет скидки и финальной стоимости.
-  - Интеграция с нативной нижней кнопкой Telegram `MainButton`.
-- 📦 **Управление складом и запасами (для владельца):**
-  - Кнопка **Admin** в шапке магазина.
-  - Пополнение запасов в один клик: `+1`, `+5`, `+10`, `-1`, обнуление или ввод любого числа.
-  - Переключатель в один клик: **"В наличии"** (зеленый) / **"Нет в наличии"** (красный).
-  - Карточки товаров, которых нет в наличии, автоматически получают бейдж "Нет в наличии", а кнопка добавления блокируется.
-- 🏷️ **Управление скидками и ценами:**
-  - Включение / выключение скидки на любой товар.
-  - Настройка процента скидки (автоматический пересчет зачеркнутой старой цены).
-  - Изменение цен на ходу.
-  - Настройка бейджей (`ХИТ`, `АКЦИЯ`, `NEW`, `VIP`).
-- 💳 **Модуль оплаты (подготовлен к подключению):**
-  - Красивый выбор способов оплаты:
-    - СБП / Банковские карты (МИР, Visa, Mastercard)
-    - Telegram Stars (Звёзды)
-    - Криптовалюта (USDT, TON, CryptoBot)
-  - Тестовое оформление с анимацией конфетти, генерацией номера заказа `AI-XXXXXX` и чека.
-- 📱 **Telegram WebApp SDK:**
-  - Тактильная отдача (Haptic Feedback).
-  - Автоматическое определение темы Telegram.
-  - Получение данных пользователя Telegram (имя, username).
-
----
-
-## 🛠 Запуск и разработка
-
-Проект расположен в:
-`C:\Users\основной\.gemini\antigravity\scratch\tg-ai-store`
-
-### 1. Запуск сервера:
-```bash
-npm run start
-```
-Сервер запустится по адресу: `http://localhost:3000` (раздает и бэкенд API, и собранный фронтенд).
-
-### 2. Запуск в режиме разработки фронтенда:
-```bash
-npm run dev
-```
-Фронтенд с горячей перезагрузкой откроется на: `http://localhost:5173`.
-
-### 3. Сборка фронтенда:
-```bash
+## Local development
+npm ci
 npm run build
-```
+npm test
+npm start
 
----
+Copy .env.example to .env and configure credentials outside Git. Never commit customer orders or secrets. For offline UI testing set BOT_ENABLED=false; actual payments require merchant credentials.
 
-## 📲 Подключение к Telegram Bot
+## Storage
+Set DATA_DIR to a persistent private directory. JSON storage supports one application process. Back up all data before deployment. Render Free has ephemeral storage and cannot reliably retain orders, catalog edits or promos. A Russian primary data store is required for the intended Russian-customer workflow; hosting migration must be completed separately.
 
-1. Откройте в Telegram [@BotFather](https://t.me/BotFather) и создайте нового бота командой `/newbot`.
-2. Скопируйте полученный токен в файл `.env`:
-   ```env
-   PORT=3000
-   BOT_TOKEN=1234567890:AA...ваш_токен...
-   WEBAPP_URL=https://ваш-домен.ngrok-free.app
-   ```
-3. Для тестирования локального сервера в Telegram используйте бесплатный туннель:
-   ```bash
-   npx ngrok http 3000
-   ```
-   и укажите полученный `https://...ngrok-free.app` в `WEBAPP_URL`.
-4. В BotFather используйте команду `/setmenubutton` или создайте Mini App через `/newapp`.
-5. Перезапустите сервер (`npm start`) — бот начнет отвечать на команду `/start` и открывать магазин прямо внутри Telegram!
+## Administration
+Tap the logo three times or use the management icon. The server validates ADMIN_PIN or signed Telegram owner identity. Add, disable, enable and delete promo codes in the admin panel. Mutations require a short-lived bearer session.
+
+## Payments
+SBP remains enabled. Amounts and discounts are computed server-side; callbacks are verified against IT-Pay. Configure the four ITPAY_* receipt fields according to the registered cash register. Empty fields do not disable payment but omit client_receipt: independently verify merchant-side fiscalization. Digital goods in Telegram are subject to Telegram Stars platform rules.
+
+Access delivery is manual. Review uncertain invoices with the payment provider; do not blindly retry. Monitor pending reservations and failed admin notifications. Never run more than one bot polling instance.

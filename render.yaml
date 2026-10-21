@@ -4,11 +4,11 @@ services:
     env: node
     plan: free
     region: frankfurt
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && npm run build
     startCommand: node server/index.js
     envVars:
       - key: NODE_VERSION
-        value: 20
+        value: 24
       - key: PORT
         value: 10000
       - key: BOT_TOKEN
@@ -16,10 +16,12 @@ services:
       - key: ADMIN_ID
         value: 8812114263
       - key: ADMIN_PIN
-        value: 7788
+        sync: false
       - key: ALFA_SBP_KEY
         sync: false
       - key: ALFA_SBP_ID
         sync: false
       - key: WEBAPP_URL
         sync: false
+      - key: TRUST_PROXY_HOPS
+        value: 1

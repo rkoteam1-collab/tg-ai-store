@@ -1,0 +1,5 @@
+[
+  {"code":"START","discountPercent":10,"active":true},
+  {"code":"AI2026","discountPercent":15,"active":true},
+  {"code":"VIPAI","discountPercent":20,"active":true}
+]
