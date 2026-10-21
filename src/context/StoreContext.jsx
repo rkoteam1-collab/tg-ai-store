@@ -4,11 +4,13 @@ import {api} from '../api';
 const StoreContext=createContext();
 export function StoreProvider({children}) {
  const [products,setProducts]=useState(defaultProducts),[cart,setCart]=useState(()=>{try{const c=JSON.parse(localStorage.getItem('tg_ai_store_cart'));return Array.isArray(c)?c.filter(i=>typeof i.id==='string'&&Number.isSafeInteger(i.quantity)&&i.quantity>0&&i.quantity<=20):[];}catch{return [];}});
+ const [connection,setConnection]=useState('connecting');
  const [appliedPromo,setAppliedPromo]=useState(null),[channelDiscountApplied,setChannelDiscountApplied]=useState(0);
  const [isAdminOpen,setIsAdminOpen]=useState(false),[isAdminAuthModalOpen,setIsAdminAuthModalOpen]=useState(false),[adminToken,setAdminToken]=useState('');
  const [isCartOpen,setIsCartOpen]=useState(false),[selectedProduct,setSelectedProduct]=useState(null),[toastMessage,setToastMessage]=useState(null);
  const showToast=(text,type='info')=>setToastMessage({text,type,id:Date.now()});
- useEffect(()=>{api('/api/products').then(data=>{if(Array.isArray(data))setProducts(data);}).catch(()=>showToast('Сервер недоступен. Показан сохранённый каталог; перед оплатой обновите страницу.','warning'));},[]);
+ async function refreshCatalog(){setConnection('connecting');try{const data=await api('/api/products',{anonymous:true,timeoutMs:75000});if(!Array.isArray(data))throw new Error();setProducts(data);setConnection('ready');}catch{setConnection('offline');}}
+ useEffect(()=>{refreshCatalog();},[]);
  useEffect(()=>{try{localStorage.setItem('tg_ai_store_cart',JSON.stringify(cart.map(({id,quantity})=>({id,quantity}))));}catch{}},[cart]);
  async function verifyAdminPin(pin='') {try{const d=await api('/api/admin/verify',{method:'POST',body:JSON.stringify({pin})});setAdminToken(d.token);return true;}catch(e){showToast(e.message,'error');return false;}}
  function logoutAdmin(){api('/api/admin/logout',{method:'POST',headers:{Authorization:'Bearer '+adminToken},body:'{}'}).catch(()=>{});setAdminToken('');setIsAdminOpen(false);}
@@ -27,6 +29,6 @@ export function StoreProvider({children}) {
  const deleteProduct=id=>persistProducts(products.filter(p=>p.id!==id));
  const cartSubtotal=cart.reduce((s,i)=>s+(products.find(p=>p.id===i.id)?.price||0)*i.quantity,0);
  const promoDiscountAmount=Math.round(cartSubtotal*(appliedPromo?.discountPercent||0)/100),channelDiscountAmount=Math.round(cartSubtotal*channelDiscountApplied/100),discountAmount=promoDiscountAmount+channelDiscountAmount;
- return <StoreContext.Provider value={{products,cart,cartSubtotal,cartTotal:cartSubtotal-discountAmount,cartItemCount:cart.reduce((s,i)=>s+i.quantity,0),discountAmount,promoDiscountAmount,channelDiscountAmount,channelDiscountApplied,isChannelDiscountClaimed:false,applyChannelDiscount:()=>setChannelDiscountApplied(5),appliedPromo,promoCodes:[],isCartOpen,setIsCartOpen,isAdminOpen,setIsAdminOpen,isAdminAuthModalOpen,setIsAdminAuthModalOpen,isAdminAuthenticated:!!adminToken,adminToken,verifyAdminPin,logoutAdmin,selectedProduct,setSelectedProduct,toastMessage,showToast,addToCart,removeFromCart,removeItemCompletely,clearCart,applyPromoCode,removePromoCode:()=>setAppliedPromo(null),updateFullProduct,updateStock,toggleInStock,updatePrice,updateDiscount,addNewProduct,deleteProduct,resetToDefaults:()=>persistProducts(defaultProducts)}}>{children}</StoreContext.Provider>;
+ return <StoreContext.Provider value={{products,connection,refreshCatalog,cart,cartSubtotal,cartTotal:cartSubtotal-discountAmount,cartItemCount:cart.reduce((s,i)=>s+i.quantity,0),discountAmount,promoDiscountAmount,channelDiscountAmount,channelDiscountApplied,isChannelDiscountClaimed:false,applyChannelDiscount:()=>setChannelDiscountApplied(5),appliedPromo,promoCodes:[],isCartOpen,setIsCartOpen,isAdminOpen,setIsAdminOpen,isAdminAuthModalOpen,setIsAdminAuthModalOpen,isAdminAuthenticated:!!adminToken,adminToken,verifyAdminPin,logoutAdmin,selectedProduct,setSelectedProduct,toastMessage,showToast,addToCart,removeFromCart,removeItemCompletely,clearCart,applyPromoCode,removePromoCode:()=>setAppliedPromo(null),updateFullProduct,updateStock,toggleInStock,updatePrice,updateDiscount,addNewProduct,deleteProduct,resetToDefaults:()=>persistProducts(defaultProducts)}}>{children}</StoreContext.Provider>;
 }
 export const useStore=()=>useContext(StoreContext);

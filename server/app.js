@@ -5,6 +5,7 @@ import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {equalSecret,opaqueToken,telegramUser,validateProducts,validatePromos,calculateOrder} from './security.js';
 import {buildReceipt} from './receipt.js';
+import {APP_RELEASE,STATIC_ORIGIN} from './launch.js';
 
 function gatewayLink(value) {
   if (typeof value === 'string') {
@@ -25,6 +26,12 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath}) {
       'Content-Security-Policy':"default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self' https://web.telegram.org https://*.telegram.org"});
     if (req.path.startsWith('/api/')) res.set('Cache-Control','no-store'); next();
   });
+  app.use('/api',(req,res,next)=>{
+    const origin=req.get('Origin');
+    if(origin===STATIC_ORIGIN){res.set({'Access-Control-Allow-Origin':origin,'Vary':'Origin','Access-Control-Allow-Methods':'GET, POST, OPTIONS','Access-Control-Allow-Headers':'Content-Type, Authorization, X-Telegram-Init-Data, X-Order-Token','Access-Control-Max-Age':'600'});}
+    if(req.method==='OPTIONS')return res.sendStatus(origin===STATIC_ORIGIN?204:403);
+    next();
+  });
   app.use(express.json({limit:'128kb'}));
   function rate(label,max,duration=60000) {return (req,res,next)=>{
     const now=Date.now(); for (const [k,v] of limits) if (v.until<now) limits.delete(k);
@@ -39,7 +46,7 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath}) {
     return res.status(401).json({message:'Войдите в панель управления'});
   }
   function owner(req,order) {const u=user(req);return (u && String(u.id)===String(order.telegramId)) || equalSecret(req.get('X-Order-Token'),order.accessToken);}
-  app.get('/api/health',(req,res)=>res.json({ok:true}));
+  app.get('/api/health',(req,res)=>res.json({ok:true,release:APP_RELEASE}));
   app.get('/api/products',(req,res)=>res.json(store.read('products').filter(p=>p.active!==false)));
   app.post('/api/admin/verify',rate('login',5,900000),(req,res)=>{
     const u=user(req), signed=u && config.ADMIN_ID && String(u.id)===String(config.ADMIN_ID);
@@ -148,7 +155,7 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath}) {
   });
   app.use('/api',(req,res)=>res.status(404).json({message:'Маршрут не найден'}));
   if (distPath && fs.existsSync(distPath)) {
-    app.use(express.static(distPath,{setHeaders(res,file){res.set('Cache-Control',file.includes(`${path.sep}assets${path.sep}`)?'public, max-age=31536000, immutable':'no-cache');}}));
+    app.use(express.static(distPath,{setHeaders(res,file){res.set('Cache-Control',file.includes(`${path.sep}assets${path.sep}`)?'public, max-age=31536000, immutable':'no-store, max-age=0');}}));
     app.get('/{*path}',(req,res)=>res.sendFile(path.join(distPath,'index.html')));
   }
   app.use((error,req,res,next)=>{console.error('Request failed:',error.type||'internal');res.status(error.type==='entity.too.large'?413:error.type==='entity.parse.failed'?400:500).json({message:'Не удалось обработать запрос'});});

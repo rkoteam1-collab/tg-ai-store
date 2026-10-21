@@ -50,7 +50,7 @@ async function fixture(t,extra={}) {
  await new Promise(r=>server.once('listening',r));t.after(()=>new Promise(r=>server.close(r)));
  const url='http://127.0.0.1:'+server.address().port;
  async function req(route,body,headers={}){const r=await fetch(url+route,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json',...headers},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,data:await r.json()};}
- return {db,req,state:(status,mismatch=false)=>{gatewayStatus=status;wrongAmount=mismatch;},stats:()=>({posts,notifies})};
+ return {url,db,req,state:(status,mismatch=false)=>{gatewayStatus=status;wrongAmount=mismatch;},stats:()=>({posts,notifies})};
 }
 const valid={email:'buyer@example.com',acceptOffer:true,expectedAmount:2790,items:[{id:'claude-pro',quantity:1}]};
 test('Catalog and orders require server-issued admin session, forged frontend flags do not count',async t=>{
@@ -119,4 +119,12 @@ test('Admin can create, disable, remove promos; checkout revalidates against sto
  await f.req('/api/admin/promos',[],h);
  assert.deepEqual((await f.req('/api/admin/promos',undefined,h)).data,[]);
  assert.equal((await f.req('/api/admin/promos',[{code:'BAD',discountPercent:100,active:true}],h)).status,400);
+});
+
+test('CDN preflight permits only the configured storefront origin',async t=>{
+ const f=await fixture(t);
+ const good=await fetch(f.url+'/api/products',{method:'OPTIONS',headers:{Origin:'https://rkoteam1-collab.github.io','Access-Control-Request-Method':'GET'}});
+ assert.equal(good.status,204);assert.equal(good.headers.get('Access-Control-Allow-Origin'),'https://rkoteam1-collab.github.io');
+ const bad=await fetch(f.url+'/api/products',{method:'OPTIONS',headers:{Origin:'https://untrusted.example','Access-Control-Request-Method':'POST'}});
+ assert.equal(bad.status,403);assert.equal(bad.headers.get('Access-Control-Allow-Origin'),null);
 });
