@@ -6,6 +6,7 @@ import {randomUUID} from 'node:crypto';
 import {equalSecret,opaqueToken,telegramUser,validateProducts,validatePromos,calculateOrder} from './security.js';
 import {buildReceipt} from './receipt.js';
 import {APP_RELEASE,STATIC_ORIGIN} from './launch.js';
+import {webhookSecret,TELEGRAM_WEBHOOK_PATH} from './bot-webhook.js';
 
 function gatewayLink(value) {
   if (typeof value === 'string') {
@@ -16,7 +17,7 @@ function gatewayLink(value) {
   return typeof url==='string' && url.startsWith('https://') ? url : undefined;
 }
 
-export function createApp({config,store,telegram,fetchImpl=fetch,distPath}) {
+export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegramWebhook}) {
   const app=express(), sessions=new Map(), limits=new Map(), reconciling=new Map();
   app.disable('x-powered-by');
   if (config.TRUST_PROXY_HOPS) app.set('trust proxy',Number(config.TRUST_PROXY_HOPS));
@@ -39,6 +40,10 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath}) {
     v.count++; limits.set(key,v);
     if (limits.size>10000 || v.count>max) return res.status(429).json({message:'Слишком много запросов. Повторите позже.'}); next();
   };}
+  app.post(TELEGRAM_WEBHOOK_PATH,rate('telegram',120),(req,res,next)=>{
+    if(!telegramWebhook||!equalSecret(req.get('X-Telegram-Bot-Api-Secret-Token'),webhookSecret(config.BOT_TOKEN)))return res.sendStatus(403);
+    return telegramWebhook(req,res,next);
+  });
   const user=req=>telegramUser(req.get('X-Telegram-Init-Data'),config.BOT_TOKEN);
   function admin(req,res,next) {
     const token=req.get('Authorization')?.replace(/^Bearer /,'');
@@ -46,7 +51,7 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath}) {
     return res.status(401).json({message:'Войдите в панель управления'});
   }
   function owner(req,order) {const u=user(req);return (u && String(u.id)===String(order.telegramId)) || equalSecret(req.get('X-Order-Token'),order.accessToken);}
-  app.get('/api/health',(req,res)=>res.json({ok:true,release:APP_RELEASE}));
+  app.get('/api/health',(req,res)=>res.json({ok:true,release:APP_RELEASE,botTransport:telegramWebhook?'webhook':'disabled'}));
   app.get('/api/products',(req,res)=>res.json(store.read('products').filter(p=>p.active!==false)));
   app.post('/api/admin/verify',rate('login',5,900000),(req,res)=>{
     const u=user(req), signed=u && config.ADMIN_ID && String(u.id)===String(config.ADMIN_ID);

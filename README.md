@@ -27,3 +27,8 @@ The bot opens https://rkoteam1-collab.github.io/tg-ai-store/ with a release quer
 server/launch.js repairs the global menu and the configured ADMIN_ID menu at server startup. Increment APP_RELEASE with a storefront release to replace cached launch URLs. FRONTEND_URL can override the public storefront URL. WEBAPP_URL alone is retained as legacy deployment configuration; bot menus use FRONTEND_URL or the CDN default.
 
 The catalog renders without waiting for the Telegram SDK or API. A cold Free backend can still delay live stock refresh, login, subscription verification and payment creation. These requests show a connection state and have timeouts. Backend sleep and durable storage require separate hosting changes.
+
+## Repairing legacy Telegram buttons
+Global menu updates cannot replace old per-chat menu overrides. Private incoming updates now clear the user's override to MenuButtonDefault, inheriting the global versioned CDN URL. /start also replaces the persistent reply keyboard. Old inline buttons embedded in historical messages are not globally editable without message IDs; users should request a fresh /start keyboard.
+
+Telegram updates use a secret-protected webhook at /api/telegram/webhook. WEBAPP_URL (or BACKEND_URL) identifies the public backend endpoint. FRONTEND_URL identifies the CDN frontend. Webhook requests can wake the sleeping Free service; first delivery may still wait for the cold start/retry. For deliberate local polling set BOT_TRANSPORT=polling. Never run a polling instance against the production token when its webhook is enabled.
