@@ -7,7 +7,7 @@ import {createStore} from './storage.js';
 import {configureMenus,menuRepairMiddleware,startStore} from './launch.js';
 import {webhookSecret,TELEGRAM_WEBHOOK_PATH} from './bot-webhook.js';
 const root=path.dirname(fileURLToPath(import.meta.url)), config=process.env;
-const store=createStore(path.resolve(config.DATA_DIR||path.join(root,'data')),path.join(root,'data/products.json'));
+const store=createStore(path.resolve(config.DATA_DIR||path.join(root,'data')),path.join(root,'data/products.json'),{ephemeralInventory:config.RENDER==='true'});
 const bot=config.BOT_TOKEN ? new Telegraf(config.BOT_TOKEN) : null;
 const telegramWebhook=bot&&config.BOT_ENABLED!=='false'&&config.BOT_TRANSPORT!=='polling'?bot.webhookCallback(TELEGRAM_WEBHOOK_PATH,{secretToken:webhookSecret(config.BOT_TOKEN)}):undefined;
 const app=createApp({config,store,telegram:bot?.telegram,distPath:path.join(root,'../dist'),telegramWebhook});

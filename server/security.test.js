@@ -59,7 +59,7 @@ test('Catalog and orders require server-issued admin session, forged frontend fl
  assert.equal((await f.req('/api/admin/orders',{})).status,401);
  assert.equal((await f.req('/api/admin/verify',{pin:'7788'})).status,401);
  const login=await f.req('/api/admin/verify',{pin:'test-password-long'});
- const h={Authorization:'Bearer '+login.data.token};
+ const h={Authorization:'Bearer '+login.data.token,'X-Catalog-Revision':(await f.req('/api/catalog')).data.revision};
  assert.equal((await f.req('/api/products',[product],h)).status,200);
  assert.equal((await f.req('/api/products',[{...product,price:0}],h)).status,400);
  await f.req('/api/admin/logout',{},h);
@@ -101,7 +101,7 @@ test('Subscription checks do not consume discount; completed payment consumes it
 test('Reserved stock cannot be oversold by concurrent requests',async t=>{
  const f=await fixture(t);f.db.products[0].stock=1;
  const replies=await Promise.all([f.req('/api/payments/create',valid),f.req('/api/payments/create',valid)]);
- assert.deepEqual(replies.map(r=>r.status).sort(),[200,400]);assert.equal(f.stats().posts,1);
+ assert.deepEqual(replies.map(r=>r.status).sort(),[200,409]);assert.equal(f.stats().posts,1);
 });
 test('Unknown API route is JSON 404, not SPA success',async t=>{
  const f=await fixture(t);assert.equal((await f.req('/api/unknown')).status,404);
@@ -127,4 +127,22 @@ test('CDN preflight permits only the configured storefront origin',async t=>{
  assert.equal(good.status,204);assert.equal(good.headers.get('Access-Control-Allow-Origin'),'https://rkoteam1-collab.github.io');
  const bad=await fetch(f.url+'/api/products',{method:'OPTIONS',headers:{Origin:'https://untrusted.example','Access-Control-Request-Method':'POST'}});
  assert.equal(bad.status,403);assert.equal(bad.headers.get('Access-Control-Allow-Origin'),null);
+});
+
+test('Stale admin cannot restore stock; disabled product never creates a bank invoice',async t=>{
+ const f=await fixture(t);const login=await f.req('/api/admin/verify',{pin:'test-password-long'});
+ const revision=(await f.req('/api/catalog')).data.revision;
+ const headers={Authorization:'Bearer '+login.data.token,'X-Catalog-Revision':revision};
+ assert.equal((await f.req('/api/products',[{...product,inStock:false,stock:0}],headers)).status,200);
+ assert.equal((await f.req('/api/products',[product],headers)).status,409);
+ assert.equal((await f.req('/api/payments/create',valid)).status,409);
+ assert.equal(f.stats().posts,0);assert.equal(f.db.orders.length,0);
+ assert.equal((await f.req('/api/products')).data[0].inStock,false);
+});
+
+test('Production manual fulfillment requires verified Telegram account before creating invoice',async t=>{
+ const f=await fixture(t,{RENDER:'true'});
+ assert.equal((await f.req('/api/payments/create',valid)).status,401);assert.equal(f.stats().posts,0);
+ assert.equal((await f.req('/api/payments/create',valid,{'X-Telegram-Init-Data':signed()})).status,200);
+ assert.equal(f.db.orders[0].telegramId,42);
 });

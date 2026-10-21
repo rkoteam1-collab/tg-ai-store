@@ -13,3 +13,5 @@ server/data/promos.json
 server/data/*.tmp
 .env.*
 !.env.example
+
+server/data/inventory-confirmed.json

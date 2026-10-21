@@ -2,7 +2,7 @@ import express from 'express';
 import compression from 'compression';
 import fs from 'node:fs';
 import path from 'node:path';
-import {randomUUID} from 'node:crypto';
+import {randomUUID,createHash} from 'node:crypto';
 import {equalSecret,opaqueToken,telegramUser,validateProducts,validatePromos,calculateOrder} from './security.js';
 import {buildReceipt} from './receipt.js';
 import {APP_RELEASE,STATIC_ORIGIN} from './launch.js';
@@ -30,7 +30,7 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
   });
   app.use('/api',(req,res,next)=>{
     const origin=req.get('Origin');
-    if(origin===STATIC_ORIGIN){res.set({'Access-Control-Allow-Origin':origin,'Vary':'Origin','Access-Control-Allow-Methods':'GET, POST, OPTIONS','Access-Control-Allow-Headers':'Content-Type, Authorization, X-Telegram-Init-Data, X-Order-Token','Access-Control-Max-Age':'600'});}
+    if(origin===STATIC_ORIGIN){res.set({'Access-Control-Allow-Origin':origin,'Vary':'Origin','Access-Control-Allow-Methods':'GET, POST, OPTIONS','Access-Control-Allow-Headers':'Content-Type, Authorization, X-Telegram-Init-Data, X-Order-Token, X-Catalog-Revision','Access-Control-Max-Age':'600'});}
     if(req.method==='OPTIONS')return res.sendStatus(origin===STATIC_ORIGIN?204:403);
     next();
   });
@@ -53,6 +53,8 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
   }
   function owner(req,order) {const u=user(req);return (u && String(u.id)===String(order.telegramId)) || equalSecret(req.get('X-Order-Token'),order.accessToken);}
   app.get('/api/health',(req,res)=>res.json({ok:true,release:APP_RELEASE,botTransport:telegramWebhook?'webhook':'disabled'}));
+  const catalogRevision=()=>createHash('sha256').update(JSON.stringify(store.read('products'))).digest('hex');
+  app.get('/api/catalog',(req,res)=>res.json({products:store.read('products').filter(p=>p.active!==false),revision:catalogRevision()}));
   app.get('/api/products',(req,res)=>res.json(store.read('products').filter(p=>p.active!==false)));
   app.post('/api/admin/verify',rate('login',5,900000),(req,res)=>{
     const u=user(req), signed=u && config.ADMIN_ID && String(u.id)===String(config.ADMIN_ID);
@@ -65,7 +67,8 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
   app.post('/api/admin/logout',(req,res)=>{sessions.delete(req.get('Authorization')?.replace(/^Bearer /,''));res.json({success:true});});
   app.post('/api/products',rate('write',30),admin,(req,res)=>{
     if (!validateProducts(req.body)) return res.status(400).json({message:'Некорректный каталог'});
-    store.write('products',req.body);res.json({success:true});
+    if(req.get('X-Catalog-Revision')!==catalogRevision())return res.status(409).json({message:'Каталог уже изменён. Обновите каталог перед сохранением, чтобы не затереть новые правки.'});
+    store.write('products',req.body);res.json({success:true,revision:catalogRevision()});
   });
   app.post('/api/admin/orders',rate('orders',30),admin,(req,res)=>res.json(store.read('orders').map(({accessToken,...o})=>o)));
   app.get('/api/admin/promos',admin,(req,res)=>res.json(store.read('promos')));
@@ -100,6 +103,7 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
   app.post('/api/payments/create',rate('payment',5),async(req,res)=>{
     if (!config.ALFA_SBP_ID || !config.ALFA_SBP_KEY) return res.status(503).json({message:'Платёжный сервис временно недоступен'});
     const b=req.body||{},u=user(req);
+    if(config.RENDER==='true'&&!u)return res.status(401).json({message:'Для связи со специалистом откройте магазин в Telegram и повторите заказ.'});
     if (req.get('X-Telegram-Init-Data') && !u) return res.status(401).json({message:'Сессия Telegram истекла. Откройте магазин заново.'});
     if (typeof b.email!=='string' || b.email.length>254 || !/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(b.email) || b.acceptOffer!==true) return res.status(400).json({message:'Укажите email и примите условия заказа'});
     let order;
@@ -112,9 +116,10 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
       const existing=store.read('orders');
       if (channelPercent && existing.some(o=>o.channelPercent && String(o.telegramId)===String(u.id) && ['creating','pending','review'].includes(o.status))) return res.status(409).json({message:'У вас уже есть неоплаченный счёт со скидкой'});
       const available=store.read('products').filter(p=>p.active!==false).map(p=>({...p,stock:p.stock-existing.filter(o=>['creating','pending','review','paid'].includes(o.status)).reduce((s,o)=>s+(o.inventoryReserved ? o.items.filter(i=>i.id===p.id).reduce((q,i)=>q+i.quantity,0):0),0)}));
+      if(!Array.isArray(b.items)||b.items.some(i=>!available.some(p=>p.id===i?.id&&p.inStock&&p.stock>=i.quantity)))return res.status(409).json({message:'Товар закончился или отключён. Обновите каталог. Счёт не создан.'});
       const quote=calculateOrder(b.items,available,b.promoCode,channelPercent,store.read('promos'));
       if (Number(b.expectedAmount)!==quote.amount) return res.status(409).json({message:'Цена изменилась. Обновите каталог и проверьте итог.'});
-      order={id:`AI-${randomUUID()}`,accessToken:opaqueToken(),...quote,email:b.email.trim(),telegramId:u?.id||null,status:'creating',inventoryReserved:true,termsVersion:'2026-10-21',createdAt:new Date().toISOString()};
+      order={id:`AI-${randomUUID()}`,accessToken:opaqueToken(),...quote,email:b.email.trim(),telegramId:u?.id||null,telegramUsername:typeof u?.username==='string'?u.username:null,status:'creating',inventoryReserved:true,termsVersion:'2026-10-21',createdAt:new Date().toISOString()};
       store.saveOrder(order);
       const client_receipt=buildReceipt(order,config);
       const r=await fetchImpl(gateway,{method:'POST',signal:AbortSignal.timeout(15000),headers:{Authorization:auth(),'Content-Type':'application/json'},body:JSON.stringify({amount:quote.amount.toFixed(2),client_payment_id:order.id,method:'sbp',description:`Заказ ${order.id}`,client_receipt,metadata:{email:order.email,order_id:order.id}})});
@@ -141,7 +146,7 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
       store.saveOrder(order);
       if (['paid','completed'].includes(p.status) && order.status!=='paid') {
         order.status='paid';order.paidAt=new Date().toISOString();store.saveOrder(order);
-        if (telegram && config.ADMIN_ID) try {await telegram.sendMessage(config.ADMIN_ID,`Оплачен заказ ${order.id}. Сумма ${order.amount} ₽. Откройте защищённую панель заказов для выдачи.`);} catch {console.error('Order notification failed');}
+        if (telegram && config.ADMIN_ID) try {await telegram.sendMessage(config.ADMIN_ID,`Оплачен заказ ${order.id}. Сумма ${order.amount} ₽. Покупатель: ${order.telegramUsername?'@'+order.telegramUsername:order.telegramId||'не указан'}; Telegram ID: ${order.telegramId||'не указан'}. Свяжитесь после оплаты; срок подключения согласуется после оплаты. Откройте защищённую панель заказов.`);} catch {console.error('Order notification failed');}
       } else if (order.status!=='paid' && ['cancelled','rejected','error'].includes(p.status)) {order.status=p.status;store.saveOrder(order);}
       return order;
     })();

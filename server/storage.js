@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 // One process, one persistent volume. Corrupt files fail closed.
-export function createStore(directory,seedPath) {
+export function createStore(directory,seedPath,{ephemeralInventory=false}={}) {
   fs.mkdirSync(directory,{recursive:true});
   function write(name,data) {
     const file=path.join(directory,`${name}.json`), temp=`${file}.${randomUUID()}.tmp`;
@@ -20,6 +20,12 @@ export function createStore(directory,seedPath) {
   if (!fs.existsSync(path.join(directory,'products.json'))) write('products',JSON.parse(fs.readFileSync(seedPath,'utf8')));
   const promoSeed=path.join(path.dirname(seedPath),'promos.seed.json');
   if (!fs.existsSync(path.join(directory,'promos.json'))) write('promos',JSON.parse(fs.readFileSync(promoSeed,'utf8')));
+  // A clean ephemeral deployment must never revive availability from a repository seed.
+  const marker=path.join(directory,'inventory-confirmed.json');
+  if(ephemeralInventory&&!fs.existsSync(marker)){
+    write('products',read('products').map(p=>({...p,inStock:false})));
+    write('inventory-confirmed',[{initializedAt:new Date().toISOString()}]);
+  }
   return {read,write,saveOrder(order) {
     const all=read('orders'), i=all.findIndex(o=>o.id===order.id);
     if (i<0) all.unshift(order); else all[i]=order;
