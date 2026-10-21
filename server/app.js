@@ -7,6 +7,7 @@ import {equalSecret,opaqueToken,telegramUser,validateProducts,validatePromos,cal
 import {buildReceipt} from './receipt.js';
 import {APP_RELEASE,STATIC_ORIGIN} from './launch.js';
 import {webhookSecret,TELEGRAM_WEBHOOK_PATH} from './bot-webhook.js';
+import {BOOTSTRAP_HASH} from './bootstrap.js';
 
 function gatewayLink(value) {
   if (typeof value === 'string') {
@@ -24,7 +25,7 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
   app.use(compression());
   app.use((req,res,next)=>{
     res.set({'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Permissions-Policy':'camera=(), microphone=(), geolocation=()',
-      'Content-Security-Policy':"default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self' https://web.telegram.org https://*.telegram.org"});
+      'Content-Security-Policy':"default-src 'self'; script-src 'self' https://telegram.org "+BOOTSTRAP_HASH+"; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self' https://web.telegram.org https://*.telegram.org"});
     if (req.path.startsWith('/api/')) res.set('Cache-Control','no-store'); next();
   });
   app.use('/api',(req,res,next)=>{

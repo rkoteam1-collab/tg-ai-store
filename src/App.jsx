@@ -16,6 +16,7 @@ import {useStore} from './context/StoreContext';
 import {useTelegram} from './hooks/useTelegram';
 export default function App(){
  useTelegram();
+ useEffect(()=>{window.aiShopifyBootComplete?.();},[]);
  const {products,connection,refreshCatalog,cartItemCount,cartTotal,setIsCartOpen,isAdminAuthModalOpen,setIsAdminAuthModalOpen,isAdminOpen,isCartOpen,selectedProduct}=useStore();
  const [category,setCategory]=useState('all'),[search,setSearch]=useState(''),[stock,setStock]=useState(false),[checkout,setCheckout]=useState(false),[legal,setLegal]=useState(null),[paused,setPaused]=useState(false);
  const [hidden,setHidden]=useState(document.hidden);

@@ -1,5 +1,6 @@
+import {getTelegramInitData} from './telegram';
 const base=(import.meta.env.VITE_API_BASE_URL||'').replace(/\/$/,'');
-export function authHeaders(){const init=window.Telegram?.WebApp?.initData;return init?{'X-Telegram-Init-Data':init}:{};}
+export function authHeaders(){const init=getTelegramInitData();return init?{'X-Telegram-Init-Data':init}:{};}
 export async function api(url,options={}){
  const {timeoutMs=20000,anonymous=false,...request}=options;
  const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),timeoutMs);

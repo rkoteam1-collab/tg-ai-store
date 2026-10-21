@@ -8,3 +8,8 @@ export function loadTelegram(){
   script.onerror=()=>{clearTimeout(timeout);resolve(null);};document.head.appendChild(script);
  });return sdk;
 }
+
+export function getTelegramInitData(){
+ const sdk=window.Telegram?.WebApp?.initData;if(sdk)return sdk;
+ try{const raw=new URLSearchParams(window.location.hash.slice(1)).get('tgWebAppData');return raw&&raw.length<=10000?raw:'';}catch{return '';}
+}
