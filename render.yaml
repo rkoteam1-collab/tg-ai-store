@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: aishopify-store
+    env: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm install && npm run build
+    startCommand: node server/index.js
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: PORT
+        value: 10000
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_ID
+        value: 8812114263
+      - key: ADMIN_PIN
+        value: 7788
+      - key: ALFA_SBP_KEY
+        sync: false
+      - key: ALFA_SBP_ID
+        sync: false
+      - key: WEBAPP_URL
+        sync: false
