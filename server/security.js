@@ -1,3 +1,4 @@
+import {cartTotals} from '../shared/cart-totals.js';
 import { createHmac, timingSafeEqual, randomBytes } from 'node:crypto';
 export const opaqueToken = () => randomBytes(32).toString('hex');
 export function equalSecret(a,b) {
@@ -26,7 +27,7 @@ export function validateProducts(v) {
   return v.every(p=>{
     if (!p || !/^[a-z0-9-]{1,80}$/.test(p.id) || ids.has(p.id)) return false;
     ids.add(p.id);
-    return typeof p.name==='string' && p.name.length>0 && p.name.length<=120 && Number.isSafeInteger(p.price) && p.price>0 && p.price<=1000000 && Number.isSafeInteger(p.stock) && p.stock>=0 && p.stock<=100000 && typeof p.inStock==='boolean' && Array.isArray(p.features) && p.features.length<=20 && p.features.every(f=>typeof f==='string' && f.length<=500) && (!p.imageUrl || /^https:\/\//.test(p.imageUrl)) && (!p.sourceUrl || /^https:\/\//.test(p.sourceUrl));
+    return (p.minimumPriceRub===undefined||(Number.isSafeInteger(p.minimumPriceRub)&&p.minimumPriceRub>=0&&p.minimumPriceRub<=p.price)) && typeof p.name==='string' && p.name.length>0 && p.name.length<=120 && Number.isSafeInteger(p.price) && p.price>0 && p.price<=1000000 && Number.isSafeInteger(p.stock) && p.stock>=0 && p.stock<=100000 && typeof p.inStock==='boolean' && Array.isArray(p.features) && p.features.length<=20 && p.features.every(f=>typeof f==='string' && f.length<=500) && (!p.imageUrl || /^https:\/\//.test(p.imageUrl)) && (!p.sourceUrl || /^https:\/\//.test(p.sourceUrl));
   });
 }
 export const PROMOS=Object.freeze({START:10,AI2026:15,VIPAI:20});
@@ -45,12 +46,12 @@ export function calculateOrder(items,products,promoCode='',channelPercent=0,prom
   const lines=items.map(i=>{
     if (!i || seen.has(i.id) || !Number.isSafeInteger(i.quantity) || i.quantity<1 || i.quantity>20) throw new Error('Invalid quantity');
     seen.add(i.id); const p=products.find(p=>p.id===i.id);
-    if (!p || !p.inStock || p.stock<i.quantity) throw new Error('Unavailable');
+    if (!p || !p.inStock || p.stock<i.quantity || p.price<(p.minimumPriceRub||0)) throw new Error('Unavailable');
     return {id:p.id,name:p.name,quantity:i.quantity,price:p.price};
   });
   const code=String(promoCode||'').trim().toUpperCase();
   const promo=promos.find(p=>p.code===code&&p.active);
   if (code && !promo) throw new Error('Invalid promo');
-  const subtotal=lines.reduce((s,p)=>s+p.price*p.quantity,0);
-  return {items:lines,subtotal,amount:subtotal-Math.round(subtotal*(promo?.discountPercent||0)/100)-Math.round(subtotal*channelPercent/100),promoCode:code||null,channelPercent};
+  const totals=cartTotals(lines.map(p=>({...p,minimumPriceRub:products.find(item=>item.id===p.id)?.minimumPriceRub||0})),promo?.discountPercent||0,channelPercent);
+  return {items:lines,subtotal:totals.subtotal,amount:totals.amount,promoCode:code||null,channelPercent:totals.channelDiscountAmount>0?channelPercent:0};
 }

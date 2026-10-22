@@ -1,4 +1,4 @@
-export const APP_RELEASE='20261021.6';
+export const APP_RELEASE='20261022.1';
 export const STATIC_ORIGIN='https://rkoteam1-collab.github.io';
 export function launchUrl(config={}){const url=new URL(config.FRONTEND_URL||'https://rkoteam1-collab.github.io/tg-ai-store/');url.searchParams.set('v',APP_RELEASE);return url.href;}
 export async function resetPersonalMenu(telegram,chatId){

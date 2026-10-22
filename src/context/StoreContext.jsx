@@ -1,3 +1,4 @@
+import {cartTotals} from '../../shared/cart-totals.js';
 import React,{createContext,useContext,useEffect,useState,useRef} from 'react';
 import {defaultProducts} from '../data/defaultProducts';
 import {api} from '../api';
@@ -29,8 +30,8 @@ export function StoreProvider({children}) {
  const updateDiscount=(id,n,active)=>persistProducts(products.map(p=>p.id===id?{...p,discount:Math.min(99,Math.max(0,Number(n)||0)),isDiscountActive:!!active,price:active?Math.round((p.originalPrice||p.price)*(1-Math.min(99,Math.max(0,Number(n)||0))/100)):(p.originalPrice||p.price)}:p));
  const addNewProduct=p=>persistProducts([...products,{...p,id:p.id||'custom-'+Date.now(),stock:Number(p.stock)||0,inStock:Number(p.stock)>0,features:p.features||[]}]);
  const deleteProduct=id=>persistProducts(products.filter(p=>p.id!==id));
- const cartSubtotal=cart.reduce((s,i)=>s+(products.find(p=>p.id===i.id)?.price||0)*i.quantity,0);
- const promoDiscountAmount=Math.round(cartSubtotal*(appliedPromo?.discountPercent||0)/100),channelDiscountAmount=Math.round(cartSubtotal*channelDiscountApplied/100),discountAmount=promoDiscountAmount+channelDiscountAmount;
+ const totals=cartTotals(cart.map(i=>({...i,price:products.find(p=>p.id===i.id)?.price||0,minimumPriceRub:products.find(p=>p.id===i.id)?.minimumPriceRub||0})),appliedPromo?.discountPercent||0,channelDiscountApplied);
+ const {subtotal:cartSubtotal,promoDiscountAmount,channelDiscountAmount,discountAmount}=totals;
  return <StoreContext.Provider value={{products,restoreProducts:persistProducts,connection,refreshCatalog,cart,cartSubtotal,cartTotal:cartSubtotal-discountAmount,cartItemCount:cart.reduce((s,i)=>s+i.quantity,0),discountAmount,promoDiscountAmount,channelDiscountAmount,channelDiscountApplied,isChannelDiscountClaimed:false,applyChannelDiscount:()=>setChannelDiscountApplied(5),appliedPromo,promoCodes:[],isCartOpen,setIsCartOpen,isAdminOpen,setIsAdminOpen,isAdminAuthModalOpen,setIsAdminAuthModalOpen,isAdminAuthenticated:!!adminToken,adminToken,verifyAdminPin,logoutAdmin,selectedProduct,setSelectedProduct,toastMessage,showToast,addToCart,removeFromCart,removeItemCompletely,clearCart,applyPromoCode,removePromoCode:()=>setAppliedPromo(null),updateFullProduct,updateStock,toggleInStock,updatePrice,updateDiscount,addNewProduct,deleteProduct,resetToDefaults:()=>persistProducts(defaultProducts)}}>{children}</StoreContext.Provider>;
 }
 export const useStore=()=>useContext(StoreContext);

@@ -146,3 +146,12 @@ test('Production manual fulfillment requires verified Telegram account before cr
  assert.equal((await f.req('/api/payments/create',valid,{'X-Telegram-Init-Data':signed()})).status,200);
  assert.equal(f.db.orders[0].telegramId,42);
 });
+
+test('Combined discounts cannot lower Max checkout below its configured floor, including mixed carts',()=>{
+ const max={...product,id:'claude-max',price:12080,minimumPriceRub:12080};
+ assert.equal(calculateOrder([{id:max.id,quantity:1}],[max],'VIPAI',5).amount,12080);
+ assert.equal(calculateOrder([{id:max.id,quantity:2}],[max],'VIPAI',5).amount,24160);
+ assert.equal(calculateOrder([{id:max.id,quantity:1}],[max],'VIPAI',5).channelPercent,0);
+ const mixed=calculateOrder([{id:max.id,quantity:1},{id:product.id,quantity:1}],[max,product],'VIPAI',5);
+ assert.equal(mixed.amount,14172);assert.equal(validateProducts([{...max,price:9590}]),false);
+});
