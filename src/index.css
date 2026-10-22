@@ -12,3 +12,8 @@
 .loading-notice{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:12px 20px;border-radius:10px;z-index:60}.orbit-core{will-change:transform}.ambient{contain:strict}@media(hover:none){.product-card:hover{transform:none;box-shadow:none}.add-button:hover{transform:none}}
 
 .connection-status{font-size:12px;line-height:1.5;color:#666;padding:10px 0}.connection-status button{margin-left:8px}
+.brand-initial{display:inline-flex;align-items:center;justify-content:center;width:100%;height:100%;font-family:Georgia,serif;font-weight:700;line-height:1;color:#111}
+.card-caption,.card-bottom small,.availability,.catalog-note,.site-footer,.legal-tabs button{color:#555}
+.card-bottom small,.availability,.catalog-note,.legal-tabs button{font-size:12px}
+.legal-tabs .selected{color:#fff}
+@media(max-width:600px){.model-line,.card-bottom small,.availability,.site-footer,.footer-links,.footer-bottom,.catalog-note{font-size:12px}.catalog-heading span{font-size:11px}}
