@@ -5,13 +5,13 @@ import {api} from '../api';
 const StoreContext=createContext();
 export function StoreProvider({children}) {
  const [products,setProducts]=useState(()=>defaultProducts.map(p=>({...p,inStock:false,stock:0}))),[cart,setCart]=useState(()=>{try{const c=JSON.parse(localStorage.getItem('tg_ai_store_cart'));return Array.isArray(c)?c.filter(i=>typeof i.id==='string'&&Number.isSafeInteger(i.quantity)&&i.quantity>0&&i.quantity<=20):[];}catch{return [];}});
- const revisionRef=useRef(''),refreshSequence=useRef(0);
+ const revisionRef=useRef(''),refreshSequence=useRef(0),catalogRequest=useRef(null);
  const [connection,setConnection]=useState('connecting');
  const [appliedPromo,setAppliedPromo]=useState(null),[channelDiscountApplied,setChannelDiscountApplied]=useState(0);
  const [isAdminOpen,setIsAdminOpen]=useState(false),[isAdminAuthModalOpen,setIsAdminAuthModalOpen]=useState(false),[adminToken,setAdminToken]=useState('');
  const [isCartOpen,setIsCartOpen]=useState(false),[selectedProduct,setSelectedProduct]=useState(null),[toastMessage,setToastMessage]=useState(null);
  const showToast=(text,type='info')=>setToastMessage({text,type,id:Date.now()});
- async function refreshCatalog(silent=false){const seq=++refreshSequence.current;if(!silent)setConnection('connecting');try{const data=await api('/api/catalog',{anonymous:true,timeoutMs:75000});if(!Array.isArray(data.products)||typeof data.revision!=='string')throw new Error();if(seq!==refreshSequence.current)return;setProducts(data.products);revisionRef.current=data.revision;setConnection('ready');}catch{if(seq===refreshSequence.current)setConnection('offline');}}
+ async function refreshCatalog(silent=false){if(catalogRequest.current)return catalogRequest.current;const seq=++refreshSequence.current;if(!silent)setConnection('connecting');const request=(async()=>{try{const data=await api('/api/catalog',{anonymous:true,timeoutMs:15000});if(!Array.isArray(data.products)||typeof data.revision!=='string')throw new Error();if(seq!==refreshSequence.current)return;setProducts(data.products);revisionRef.current=data.revision;setConnection('ready');}catch{if(seq===refreshSequence.current)setConnection('offline');}})();catalogRequest.current=request;try{return await request;}finally{if(catalogRequest.current===request)catalogRequest.current=null;}}
  useEffect(()=>{refreshCatalog();},[]);
  useEffect(()=>{if(isAdminOpen)return;const update=()=>{if(!document.hidden)refreshCatalog(true);};const timer=setInterval(update,15000);window.addEventListener('focus',update);document.addEventListener('visibilitychange',update);return()=>{clearInterval(timer);window.removeEventListener('focus',update);document.removeEventListener('visibilitychange',update);};},[isAdminOpen]);
  useEffect(()=>{try{localStorage.setItem('tg_ai_store_cart',JSON.stringify(cart.map(({id,quantity})=>({id,quantity}))));}catch{}},[cart]);

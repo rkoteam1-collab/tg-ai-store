@@ -24,5 +24,6 @@ test('Start replaces old persistent keyboard with current storefront address',as
 test('Backup entry stays inside Telegram on the alternate host and advertises plain browser diagnostics',async()=>{
  let text,extra;await startStore({reply:async(t,e)=>{text=t;extra=e;}});
  assert(text.includes(launchUrl()));assert(text.includes(backupLaunchUrl()));assert.equal(extra.link_preview_options.is_disabled,true);
+ assert(text.includes('отправьте /start ещё раз'));assert(text.includes('«Запасной вход»'));
  assert.equal(backupLaunchUrl({WEBAPP_URL:'https://example.com/'}),'https://example.com/?v='+APP_RELEASE);
 });
