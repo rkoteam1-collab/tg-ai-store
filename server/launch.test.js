@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Telegram} from 'telegraf';
-import {launchUrl,configureMenus,APP_RELEASE,menuRepairMiddleware,startStore} from './launch.js';
+import {launchUrl,backupLaunchUrl,configureMenus,APP_RELEASE,menuRepairMiddleware,startStore} from './launch.js';
 test('Telegraf sets global versioned URL and clears personal overrides for known users',async()=>{
  const calls=[];const telegram=new Telegram('test-token-not-real');telegram.callApi=async(method,args)=>{calls.push({method,...args});return true;};
  await configureMenus(telegram,{ADMIN_ID:'8812114263'},[123,456,123,null]);
@@ -18,5 +18,11 @@ test('Any private user repairs its own override, repeated updates are cached, gr
 test('Start replaces old persistent keyboard with current storefront address',async()=>{
  let markup;await startStore({reply:async(text,extra)=>{markup=extra.reply_markup;}});
  assert.equal(markup.is_persistent,true);assert.equal(markup.resize_keyboard,true);
- assert.equal(markup.keyboard[0][0].web_app.url,launchUrl());assert(!JSON.stringify(markup).includes('cloudflare'));
+ assert.equal(markup.keyboard[0][0].text,'Открыть AIshopify');assert.equal(markup.keyboard[0][0].web_app.url,launchUrl());assert.equal(markup.keyboard[1][0].text,'Запасной вход');assert.equal(markup.keyboard[1][0].web_app.url,backupLaunchUrl());assert.notEqual(new URL(markup.keyboard[0][0].web_app.url).origin,new URL(markup.keyboard[1][0].web_app.url).origin);assert(!JSON.stringify(markup).includes('cloudflare'));
+});
+
+test('Backup entry stays inside Telegram on the alternate host and advertises plain browser diagnostics',async()=>{
+ let text,extra;await startStore({reply:async(t,e)=>{text=t;extra=e;}});
+ assert(text.includes(launchUrl()));assert(text.includes(backupLaunchUrl()));assert.equal(extra.link_preview_options.is_disabled,true);
+ assert.equal(backupLaunchUrl({WEBAPP_URL:'https://example.com/'}),'https://example.com/?v='+APP_RELEASE);
 });

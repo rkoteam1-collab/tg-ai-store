@@ -16,6 +16,7 @@ let shuttingDown=false;
 if (bot && config.BOT_ENABLED!=='false') {
   bot.use(menuRepairMiddleware(bot.telegram));
   bot.start(ctx=>startStore(ctx,config));
+  bot.command(['shop','help'],ctx=>startStore(ctx,config));
   bot.command('myid',ctx=>ctx.reply(String(ctx.from.id)));
   bot.command('paysupport',ctx=>ctx.reply('По вопросам оплаты и возврата: @MaximRkoTeam. Укажите номер заказа. Не отправляйте пароли или данные банковской карты.'));
   bot.catch(()=>console.error('Telegram update failed'));
