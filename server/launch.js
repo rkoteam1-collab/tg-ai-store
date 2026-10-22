@@ -1,4 +1,4 @@
-export const APP_RELEASE='20261022.4';
+export const APP_RELEASE='20261022.5';
 export const STATIC_ORIGIN='https://rkoteam1-collab.github.io';
 export function launchUrl(config={}){const url=new URL(config.FRONTEND_URL||'https://rkoteam1-collab.github.io/tg-ai-store/');url.searchParams.set('v',APP_RELEASE);return url.href;}
 export function backupLaunchUrl(config={}){const url=new URL(config.BACKUP_FRONTEND_URL||config.WEBAPP_URL||'https://tg-ai-store.onrender.com/');url.searchParams.set('v',APP_RELEASE);return url.href;}
@@ -24,5 +24,5 @@ export function menuRepairMiddleware(telegram){
 }
 export function startStore(ctx,config={}){
  const primary=launchUrl(config),backup=backupLaunchUrl(config);
- return ctx.reply('AIshopify — каталог подписок и технических услуг.\n\nЕсли приложение зависло или долго не открывается, закройте его, отправьте /start ещё раз и нажмите «Запасной вход».\n\nПроверить адреса в обычном браузере:\n'+primary+'\n'+backup+'\n\nПоддержка: @MaximRkoTeam.',{link_preview_options:{is_disabled:true},reply_markup:{keyboard:[[{text:'Открыть AIshopify',web_app:{url:primary}}],[{text:'Запасной вход',web_app:{url:backup}}]],resize_keyboard:true,is_persistent:true}});
+ return ctx.reply('AIshopify — каталог подписок и технических услуг.\n\nЕсли приложение зависло или долго не открывается, закройте его, отправьте /start ещё раз и нажмите «Запасной вход».\n\nПоддержка: @MaximRkoTeam.',{link_preview_options:{is_disabled:true},reply_markup:{keyboard:[[{text:'Открыть AIshopify',web_app:{url:primary}}],[{text:'Запасной вход',web_app:{url:backup}}]],resize_keyboard:true,is_persistent:true}});
 }
