@@ -11,7 +11,7 @@ npm start
 Copy .env.example to .env and configure credentials outside Git. Never commit customer orders or secrets. For offline UI testing set BOT_ENABLED=false; actual payments require merchant credentials.
 
 ## Storage
-Set DATA_DIR to a persistent private directory. JSON storage supports one application process. Back up all data before deployment. Render Free has ephemeral storage and cannot reliably retain orders, catalog edits or promos. A Russian primary data store is required for the intended Russian-customer workflow; hosting migration must be completed separately.
+Set DATA_DIR to a persistent private directory. JSON storage supports one application process. Back up all data before deployment. Render Free has ephemeral storage and cannot reliably retain orders, catalog edits or promos. A Russian primary data store is required for the intended Russian-customer workflow; hosting migration must be completed separately. The prepared VPS deployment and migration checklist are in [deploy/ru/README.md](deploy/ru/README.md). Adding those files has not moved the current live service.
 
 ## Administration
 Tap the logo three times or use the management icon. The server validates ADMIN_PIN or signed Telegram owner identity. Add, disable, enable and delete promo codes in the admin panel. Mutations require a short-lived bearer session.

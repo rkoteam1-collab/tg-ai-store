@@ -30,3 +30,20 @@ test('Fresh ephemeral deployment disables seeded inventory, existing edits survi
  assert(createStore(directory,seed,{ephemeralInventory:true}).read('products').every(p=>p.inStock===false));
  }finally{fs.rmSync(directory,{recursive:true,force:true});}
 });
+
+test('Added cards and edited price and stock persist when the store reopens',()=>{
+ const directory=fs.mkdtempSync(path.join(os.tmpdir(),'ai-catalog-test-'));
+ try {
+  const seed=fileURLToPath(new URL('./data/products.json',import.meta.url));
+  const first=createStore(directory,seed);
+  const catalog=first.read('products');
+  const original=catalog[0];
+  const added={...original,id:'persisted-new-card',name:'Новая карточка',price:4321,inStock:false};
+  first.write('products',[{...original,price:1234,inStock:false},...catalog.slice(1),added]);
+  const reopened=createStore(directory,seed).read('products');
+  assert.equal(reopened.find(product=>product.id===original.id).price,1234);
+  assert.equal(reopened.find(product=>product.id===original.id).inStock,false);
+  assert.equal(reopened.find(product=>product.id===added.id).name,'Новая карточка');
+  assert.equal(reopened.find(product=>product.id===added.id).price,4321);
+ } finally {fs.rmSync(directory,{recursive:true,force:true});}
+});

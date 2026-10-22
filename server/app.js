@@ -59,7 +59,8 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
   app.post('/api/admin/verify',rate('login',5,900000),(req,res)=>{
     const u=user(req), signed=u && config.ADMIN_ID && String(u.id)===String(config.ADMIN_ID);
     const pin=config.ADMIN_PIN?.length>=4 && equalSecret(req.body?.pin,config.ADMIN_PIN);
-    if (!signed && !pin) return res.status(401).json({success:false,message:'Неверные данные входа'});
+    const permitted=config.ADMIN_REQUIRE_TELEGRAM==='true' ? signed&&pin : signed||pin;
+    if (!permitted) return res.status(401).json({success:false,message:'Неверные данные входа'});
     for (const [k,v] of sessions) if (v<=Date.now()) sessions.delete(k);
     const token=opaqueToken(); sessions.set(token,Date.now()+3600000); res.json({success:true,token});
   });
@@ -101,9 +102,11 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
   const gateway='https://api.gw.itpay.ru/v1/payments';
   const auth=()=>`Basic ${Buffer.from(`${config.ALFA_SBP_ID}:${config.ALFA_SBP_KEY}`).toString('base64')}`;
   app.post('/api/payments/create',rate('payment',5),async(req,res)=>{
+    if(config.PAYMENTS_ENABLED==='false')return res.status(503).json({message:'Оформление заказа временно недоступно'});
     if (!config.ALFA_SBP_ID || !config.ALFA_SBP_KEY) return res.status(503).json({message:'Платёжный сервис временно недоступен'});
     const b=req.body||{},u=user(req);
-    if(config.RENDER==='true'&&!u)return res.status(401).json({message:'Для связи со специалистом откройте магазин в Telegram и повторите заказ.'});
+    // This must remain enforced after moving the API away from Render.
+    if((config.NODE_ENV==='production'||config.RENDER==='true')&&!u)return res.status(401).json({message:'Для связи со специалистом откройте магазин в Telegram и повторите заказ.'});
     if (req.get('X-Telegram-Init-Data') && !u) return res.status(401).json({message:'Сессия Telegram истекла. Откройте магазин заново.'});
     if (typeof b.email!=='string' || b.email.length>254 || !/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(b.email) || b.acceptOffer!==true) return res.status(400).json({message:'Укажите email и примите условия заказа'});
     let order;

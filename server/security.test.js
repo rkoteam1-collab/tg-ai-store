@@ -147,6 +147,28 @@ test('Production manual fulfillment requires verified Telegram account before cr
  assert.equal(f.db.orders[0].telegramId,42);
 });
 
+test('Russian production host also requires verified Telegram before invoicing',async t=>{
+ const f=await fixture(t,{NODE_ENV:'production',RENDER:'false'});
+ assert.equal((await f.req('/api/payments/create',valid)).status,401);
+ assert.equal(f.stats().posts,0);
+ assert.equal((await f.req('/api/payments/create',valid,{'X-Telegram-Init-Data':signed()})).status,200);
+});
+
+test('Russian production can require owner Telegram identity and PIN together',async t=>{
+ const f=await fixture(t,{NODE_ENV:'production',ADMIN_REQUIRE_TELEGRAM:'true'});
+ assert.equal((await f.req('/api/admin/verify',{pin:'test-password-long'})).status,401);
+ assert.equal((await f.req('/api/admin/verify',{pin:'wrong'},{'X-Telegram-Init-Data':signed()})).status,401);
+ assert.equal((await f.req('/api/admin/verify',{pin:'test-password-long'},{'X-Telegram-Init-Data':signed(7)})).status,401);
+ assert.equal((await f.req('/api/admin/verify',{pin:'test-password-long'},{'X-Telegram-Init-Data':signed()})).status,200);
+});
+
+test('Payment pause rejects invoices before touching the gateway',async t=>{
+ const f=await fixture(t,{NODE_ENV:'production',PAYMENTS_ENABLED:'false'});
+ assert.equal((await f.req('/api/payments/create',valid,{'X-Telegram-Init-Data':signed()})).status,503);
+ assert.equal(f.stats().posts,0);
+ assert.equal(f.db.orders.length,0);
+});
+
 test('Combined discounts cannot lower Max checkout below its configured floor, including mixed carts',()=>{
  const max={...product,id:'claude-max',price:12080,minimumPriceRub:12080};
  assert.equal(calculateOrder([{id:max.id,quantity:1}],[max],'VIPAI',5).amount,12080);

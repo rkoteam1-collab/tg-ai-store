@@ -1,0 +1,51 @@
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: deploy/ru/Dockerfile
+      args:
+        VITE_BACKUP_URL: ${BACKEND_URL}
+    env_file: .env.production
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATA_DIR: /data
+      BACKUP_DIR: /backup
+      TRUST_PROXY_HOPS: "1"
+    volumes:
+      - orders_data:/data
+      - backups:/backup
+    read_only: true
+    tmpfs:
+      - /tmp:mode=700
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks: [internal]
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      SHOP_DOMAIN: ${SHOP_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [internal]
+networks:
+  internal:
+volumes:
+  orders_data:
+  backups:
+  caddy_data:
+  caddy_config:

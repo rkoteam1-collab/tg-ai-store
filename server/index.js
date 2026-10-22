@@ -7,6 +7,13 @@ import {createStore} from './storage.js';
 import {configureMenus,menuRepairMiddleware,startStore} from './launch.js';
 import {webhookSecret,TELEGRAM_WEBHOOK_PATH} from './bot-webhook.js';
 const root=path.dirname(fileURLToPath(import.meta.url)), config=process.env;
+if(config.NODE_ENV==='production'&&config.RENDER!=='true'){
+  if(!config.DATA_DIR||!path.isAbsolute(config.DATA_DIR))throw new Error('Production requires an absolute persistent DATA_DIR');
+  if(path.resolve(config.DATA_DIR).startsWith(root+path.sep))throw new Error('Production DATA_DIR must be outside the application checkout');
+  let backend;
+  try{backend=new URL(config.BACKEND_URL);}catch{throw new Error('Production requires an HTTPS BACKEND_URL for the Telegram webhook');}
+  if(backend.protocol!=='https:'||backend.hostname.endsWith('.onrender.com'))throw new Error('Production BACKEND_URL must point to the new HTTPS host');
+}
 const store=createStore(path.resolve(config.DATA_DIR||path.join(root,'data')),path.join(root,'data/products.json'),{ephemeralInventory:config.RENDER==='true'});
 const bot=config.BOT_TOKEN ? new Telegraf(config.BOT_TOKEN) : null;
 const telegramWebhook=bot&&config.BOT_ENABLED!=='false'&&config.BOT_TRANSPORT!=='polling'?bot.webhookCallback(TELEGRAM_WEBHOOK_PATH,{secretToken:webhookSecret(config.BOT_TOKEN)}):undefined;

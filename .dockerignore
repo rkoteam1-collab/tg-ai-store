@@ -1,0 +1,14 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+node_modules
+dist
+*.log
+server/data/orders.json
+server/data/promos.json
+server/data/channel_discounts.json
+server/data/inventory-confirmed.json
+server/data/*.tmp
+docs

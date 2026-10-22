@@ -3,7 +3,7 @@ import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 // One process, one persistent volume. Corrupt files fail closed.
 export function createStore(directory,seedPath,{ephemeralInventory=false}={}) {
-  fs.mkdirSync(directory,{recursive:true});
+  fs.mkdirSync(directory,{recursive:true,mode:0o700});
   function write(name,data) {
     const file=path.join(directory,`${name}.json`), temp=`${file}.${randomUUID()}.tmp`;
     const fd=fs.openSync(temp,'wx',0o600);
