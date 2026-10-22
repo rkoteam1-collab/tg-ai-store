@@ -8,8 +8,8 @@
     "logo": "claude",
     "tagline": "Для текстов, кода и анализа",
     "description": "Для текстов, кода и анализа. Sonnet 5.5 · Opus 5.5. Доступность моделей, функций и лимитов зависит от тарифа, региона и аккаунта.",
-    "price": 2290,
-    "originalPrice": 2290,
+    "price": 2190,
+    "originalPrice": 2190,
     "discount": 0,
     "isDiscountActive": false,
     "stock": 5,
@@ -23,7 +23,11 @@
     ],
     "model": "Sonnet 5.5 · Opus 5.5",
     "sourceUrl": "https://claude.com/pricing",
-    "verifiedAt": "2026-10-21"
+    "verifiedAt": "2026-10-21",
+    "minimumPriceRub": 1940,
+    "priceOnRequest": false,
+    "priceVerifiedAt": "2026-10-22",
+    "priceSourceUrl": "https://apps.apple.com/tr/app/id6473753684"
   },
   {
     "id": "claude-max",
@@ -50,7 +54,10 @@
     "model": "Sonnet 5.5 · Opus 5.5",
     "sourceUrl": "https://claude.com/pricing",
     "verifiedAt": "2026-10-21",
-    "minimumPriceRub": 12080
+    "minimumPriceRub": 12080,
+    "priceOnRequest": false,
+    "priceVerifiedAt": "2026-10-22",
+    "priceSourceUrl": "https://apps.apple.com/tr/app/id6473753684"
   },
   {
     "id": "chatgpt-plus",
@@ -76,7 +83,11 @@
     ],
     "model": "GPT-6",
     "sourceUrl": "https://help.openai.com/en/articles/6950777-what-is-chatgpt-plus",
-    "verifiedAt": "2026-10-21"
+    "verifiedAt": "2026-10-21",
+    "minimumPriceRub": 1940,
+    "priceOnRequest": false,
+    "priceVerifiedAt": "2026-10-22",
+    "priceSourceUrl": "https://apps.apple.com/tr/app/id6448311069"
   },
   {
     "id": "chatgpt-pro",
@@ -87,8 +98,8 @@
     "logo": "chatgpt",
     "tagline": "Для интенсивной работы и сложных задач",
     "description": "Для интенсивной работы и сложных задач. GPT-6 Astra. Доступность моделей, функций и лимитов зависит от тарифа, региона и аккаунта.",
-    "price": 18590,
-    "originalPrice": 18590,
+    "price": 16990,
+    "originalPrice": 16990,
     "discount": 0,
     "isDiscountActive": false,
     "stock": 2,
@@ -102,7 +113,11 @@
     ],
     "model": "GPT-6 Astra",
     "sourceUrl": "https://help.openai.com/en/articles/9793128-about-chatgpt-pro-tiers",
-    "verifiedAt": "2026-10-21"
+    "verifiedAt": "2026-10-21",
+    "minimumPriceRub": 16700,
+    "priceOnRequest": false,
+    "priceVerifiedAt": "2026-10-22",
+    "priceSourceUrl": "https://apps.apple.com/tr/app/id6448311069"
   },
   {
     "id": "gemini-pro",
@@ -113,8 +128,8 @@
     "logo": "gemini",
     "tagline": "ИИ-инструменты Google для работы и творчества",
     "description": "ИИ-инструменты Google для работы и творчества. Gemini 4 Argon. Доступность моделей, функций и лимитов зависит от тарифа, региона и аккаунта.",
-    "price": 2290,
-    "originalPrice": 2290,
+    "price": 1990,
+    "originalPrice": 1990,
     "discount": 0,
     "isDiscountActive": false,
     "stock": 6,
@@ -128,7 +143,11 @@
     ],
     "model": "Gemini 4 Argon",
     "sourceUrl": "https://one.google.com/about/google-ai-plans/",
-    "verifiedAt": "2026-10-21"
+    "verifiedAt": "2026-10-21",
+    "minimumPriceRub": 1727,
+    "priceOnRequest": false,
+    "priceVerifiedAt": "2026-10-22",
+    "priceSourceUrl": "https://apps.apple.com/tr/app/id6477489729"
   },
   {
     "id": "gemini-ultra",
@@ -139,8 +158,8 @@
     "logo": "gemini",
     "tagline": "Старший тариф Google AI",
     "description": "Старший тариф Google AI. Gemini 4 Argon. Доступность моделей, функций и лимитов зависит от тарифа, региона и аккаунта.",
-    "price": 18590,
-    "originalPrice": 18590,
+    "price": 0,
+    "originalPrice": 0,
     "discount": 0,
     "isDiscountActive": false,
     "stock": 0,
@@ -154,7 +173,11 @@
     ],
     "model": "Gemini 4 Argon",
     "sourceUrl": "https://blog.google/products-and-platforms/products/google-one/google-ai-subscriptions/",
-    "verifiedAt": "2026-10-21"
+    "verifiedAt": "2026-10-21",
+    "minimumPriceRub": 0,
+    "priceOnRequest": true,
+    "priceVerifiedAt": "2026-10-22",
+    "priceSourceUrl": "https://apps.apple.com/tr/app/id6477489729"
   },
   {
     "id": "kimi-pro",
@@ -165,8 +188,8 @@
     "logo": "kimi",
     "tagline": "Для документов, исследований и кода",
     "description": "Для документов, исследований и кода. Kimi K3. Доступность моделей, функций и лимитов зависит от тарифа, региона и аккаунта.",
-    "price": 3999,
-    "originalPrice": 3999,
+    "price": 3790,
+    "originalPrice": 3790,
     "discount": 0,
     "isDiscountActive": false,
     "stock": 4,
@@ -180,7 +203,11 @@
     ],
     "model": "Kimi K3",
     "sourceUrl": "https://www.kimi.com/membership/pricing?lang=en-US",
-    "verifiedAt": "2026-10-21"
+    "verifiedAt": "2026-10-21",
+    "minimumPriceRub": 3580,
+    "priceOnRequest": false,
+    "priceVerifiedAt": "2026-10-22",
+    "priceSourceUrl": "https://apps.apple.com/tr/app/id6474233312"
   },
   {
     "id": "kimi-max",
@@ -206,6 +233,10 @@
     ],
     "model": "Kimi K3",
     "sourceUrl": "https://www.kimi.com/membership/pricing?lang=en-US",
-    "verifiedAt": "2026-10-21"
+    "verifiedAt": "2026-10-21",
+    "minimumPriceRub": 1940,
+    "priceOnRequest": false,
+    "priceVerifiedAt": "2026-10-22",
+    "priceSourceUrl": "https://apps.apple.com/tr/app/id6474233312"
   }
 ]

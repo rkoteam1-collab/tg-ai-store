@@ -27,7 +27,7 @@ export function validateProducts(v) {
   return v.every(p=>{
     if (!p || !/^[a-z0-9-]{1,80}$/.test(p.id) || ids.has(p.id)) return false;
     ids.add(p.id);
-    return (p.minimumPriceRub===undefined||(Number.isSafeInteger(p.minimumPriceRub)&&p.minimumPriceRub>=0&&p.minimumPriceRub<=p.price)) && typeof p.name==='string' && p.name.length>0 && p.name.length<=120 && Number.isSafeInteger(p.price) && p.price>0 && p.price<=1000000 && Number.isSafeInteger(p.stock) && p.stock>=0 && p.stock<=100000 && typeof p.inStock==='boolean' && Array.isArray(p.features) && p.features.length<=20 && p.features.every(f=>typeof f==='string' && f.length<=500) && (!p.imageUrl || /^https:\/\//.test(p.imageUrl)) && (!p.sourceUrl || /^https:\/\//.test(p.sourceUrl));
+    return (p.priceOnRequest===undefined||typeof p.priceOnRequest==='boolean') && (!p.priceOnRequest||!p.inStock) && (p.minimumPriceRub===undefined||(Number.isSafeInteger(p.minimumPriceRub)&&p.minimumPriceRub>=0&&p.minimumPriceRub<=p.price)) && typeof p.name==='string' && p.name.length>0 && p.name.length<=120 && Number.isSafeInteger(p.price) && (p.price>0||(p.priceOnRequest===true&&p.price===0)) && p.price<=1000000 && Number.isSafeInteger(p.stock) && p.stock>=0 && p.stock<=100000 && typeof p.inStock==='boolean' && Array.isArray(p.features) && p.features.length<=20 && p.features.every(f=>typeof f==='string' && f.length<=500) && (!p.imageUrl || /^https:\/\//.test(p.imageUrl)) && (!p.sourceUrl || /^https:\/\//.test(p.sourceUrl));
   });
 }
 export const PROMOS=Object.freeze({START:10,AI2026:15,VIPAI:20});
@@ -46,7 +46,7 @@ export function calculateOrder(items,products,promoCode='',channelPercent=0,prom
   const lines=items.map(i=>{
     if (!i || seen.has(i.id) || !Number.isSafeInteger(i.quantity) || i.quantity<1 || i.quantity>20) throw new Error('Invalid quantity');
     seen.add(i.id); const p=products.find(p=>p.id===i.id);
-    if (!p || !p.inStock || p.stock<i.quantity || p.price<(p.minimumPriceRub||0)) throw new Error('Unavailable');
+    if (!p || p.priceOnRequest || !p.inStock || p.stock<i.quantity || p.price<(p.minimumPriceRub||0)) throw new Error('Unavailable');
     return {id:p.id,name:p.name,quantity:i.quantity,price:p.price};
   });
   const code=String(promoCode||'').trim().toUpperCase();

@@ -116,7 +116,7 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
       const existing=store.read('orders');
       if (channelPercent && existing.some(o=>o.channelPercent && String(o.telegramId)===String(u.id) && ['creating','pending','review'].includes(o.status))) return res.status(409).json({message:'У вас уже есть неоплаченный счёт со скидкой'});
       const available=store.read('products').filter(p=>p.active!==false).map(p=>({...p,stock:p.stock-existing.filter(o=>['creating','pending','review','paid'].includes(o.status)).reduce((s,o)=>s+(o.inventoryReserved ? o.items.filter(i=>i.id===p.id).reduce((q,i)=>q+i.quantity,0):0),0)}));
-      if(!Array.isArray(b.items)||b.items.some(i=>!available.some(p=>p.id===i?.id&&p.inStock&&p.stock>=i.quantity)))return res.status(409).json({message:'Товар закончился или отключён. Обновите каталог. Счёт не создан.'});
+      if(!Array.isArray(b.items)||b.items.some(i=>!available.some(p=>p.id===i?.id&&!p.priceOnRequest&&p.inStock&&p.stock>=i.quantity)))return res.status(409).json({message:'Товар закончился или отключён. Обновите каталог. Счёт не создан.'});
       const quote=calculateOrder(b.items,available,b.promoCode,channelPercent,store.read('promos'));
       if (Number(b.expectedAmount)!==quote.amount) return res.status(409).json({message:'Цена изменилась. Обновите каталог и проверьте итог.'});
       order={id:`AI-${randomUUID()}`,accessToken:opaqueToken(),...quote,email:b.email.trim(),telegramId:u?.id||null,telegramUsername:typeof u?.username==='string'?u.username:null,status:'creating',inventoryReserved:true,termsVersion:'2026-10-21',createdAt:new Date().toISOString()};

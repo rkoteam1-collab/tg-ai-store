@@ -11,8 +11,8 @@ export default function ProductCard({product,index=0}) {
      <h3>{product.name}</h3><p className="model-line">{product.model}</p>
      <p className="card-caption">{product.tagline}</p>
    </button>
-   <div className="card-bottom"><div><strong>{product.price.toLocaleString('ru-RU')} ₽</strong><small>/ {product.duration}</small></div>
-   {product.inStock&&product.stock>0 ? quantity ? <div className="quantity"><button aria-label={'Убрать '+product.name} onClick={()=>removeFromCart(product.id)}><Minus size={15}/></button><span>{quantity}</span><button aria-label={'Добавить '+product.name} onClick={()=>addToCart(product)}><Plus size={15}/></button></div> : <button className="add-button" aria-label={'В корзину: '+product.name} onClick={()=>addToCart(product)}><Plus size={21}/></button> : <button className="availability" onClick={()=>setSelectedProduct(product)}>Уточнить</button>}
+   <div className="card-bottom"><div><strong>{product.priceOnRequest?'Цена по запросу':product.price.toLocaleString('ru-RU')+' ₽'}</strong><small>/ {product.duration}</small></div>
+   {!product.priceOnRequest&&product.inStock&&product.stock>0 ? quantity ? <div className="quantity"><button aria-label={'Убрать '+product.name} onClick={()=>removeFromCart(product.id)}><Minus size={15}/></button><span>{quantity}</span><button aria-label={'Добавить '+product.name} onClick={()=>addToCart(product)}><Plus size={15}/></button></div> : <button className="add-button" aria-label={'В корзину: '+product.name} onClick={()=>addToCart(product)}><Plus size={21}/></button> : <button className="availability" onClick={()=>setSelectedProduct(product)}>Уточнить</button>}
    </div>
  </article>;
 }

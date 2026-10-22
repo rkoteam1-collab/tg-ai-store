@@ -155,3 +155,18 @@ test('Combined discounts cannot lower Max checkout below its configured floor, i
  const mixed=calculateOrder([{id:max.id,quantity:1},{id:product.id,quantity:1}],[max,product],'VIPAI',5);
  assert.equal(mixed.amount,14172);assert.equal(validateProducts([{...max,price:9590}]),false);
 });
+
+test('Quote-only products cannot create invoices even if availability is accidentally enabled',async t=>{
+ const f=await fixture(t);Object.assign(f.db.products[0],{price:0,minimumPriceRub:0,priceOnRequest:true,inStock:true});
+ assert.equal((await f.req('/api/payments/create',{...valid,expectedAmount:0})).status,409);
+ assert.equal(f.stats().posts,0);assert.equal(f.db.orders.length,0);
+ assert.throws(()=>calculateOrder(valid.items,f.db.products));
+ assert.equal(validateProducts([{...product,price:0,priceOnRequest:true,inStock:false}]),true);
+ assert.equal(validateProducts([{...product,price:0,priceOnRequest:true,inStock:true}]),false);
+});
+
+test('Turkish pricing floors protect every reviewed subscription and a mixed order from combined discounts',async()=>{
+ const fs=await import('node:fs');const products=JSON.parse(fs.readFileSync(new URL('./data/products.json',import.meta.url),'utf8')).filter(p=>!p.priceOnRequest).map(p=>({...p,inStock:true,stock:20}));
+ for(const p of products){const q=calculateOrder([{id:p.id,quantity:2}],products,'VIPAI',5);assert(q.amount>=p.minimumPriceRub*2);assert(q.amount<=p.price*2);}
+ const mixed=calculateOrder(products.map(p=>({id:p.id,quantity:1})),products,'VIPAI',5);assert(mixed.amount>=products.reduce((sum,p)=>sum+p.minimumPriceRub,0));
+});
