@@ -12,16 +12,11 @@
 .loading-notice{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:12px 20px;border-radius:10px;z-index:60}.orbit-core{will-change:transform}.ambient{contain:strict}@media(hover:none){.product-card:hover{transform:none;box-shadow:none}.add-button:hover{transform:none}}
 
 .connection-status{font-size:12px;line-height:1.5;color:#666;padding:10px 0}.connection-status button{margin-left:8px}
-.brand-avatar{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--avatar-size);height:var(--avatar-size);background:transparent;transition:transform .25s ease}
-.brand-avatar img{display:block;width:90%;height:90%;object-fit:contain}
-.brand-avatar--claude img{width:92%;height:92%}
-.brand-avatar--chatgpt img{width:88%;height:88%}
-.brand-avatar--gemini img{width:92%;height:92%}
-.brand-avatar--kimi img{width:88%;height:88%}
-.brand-initial{font-family:Georgia,serif;font-weight:700;line-height:1;color:#111}
-.product-card:hover .brand-avatar{transform:scale(1.06)}
-@media(max-width:600px){.card-brand .brand-avatar{width:38px;height:38px}}
-@media(prefers-reduced-motion:reduce){.brand-avatar{transition:none}.product-card:hover .brand-avatar{transform:none}}
+.brand-mark{display:block;flex:none;width:calc(var(--mark-size)*.9);height:calc(var(--mark-size)*.9);object-fit:contain;background:none;border:0;border-radius:0;box-shadow:none;transition:transform .25s ease}
+.brand-mark--other{display:inline-flex;align-items:center;justify-content:center;font-family:Georgia,serif;font-weight:700;line-height:1;color:#111}
+.product-card:hover .brand-mark{transform:scale(1.06)}
+@media(max-width:600px){.card-brand .brand-mark{max-width:38px;max-height:38px}}
+@media(prefers-reduced-motion:reduce){.brand-mark{transition:none}.product-card:hover .brand-mark{transform:none}}
 .card-caption,.card-bottom small,.availability,.catalog-note,.site-footer,.legal-tabs button{color:#555}
 .card-bottom small,.availability,.catalog-note,.legal-tabs button{font-size:12px}
 .legal-tabs .selected{color:#fff}
