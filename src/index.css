@@ -12,7 +12,16 @@
 .loading-notice{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:12px 20px;border-radius:10px;z-index:60}.orbit-core{will-change:transform}.ambient{contain:strict}@media(hover:none){.product-card:hover{transform:none;box-shadow:none}.add-button:hover{transform:none}}
 
 .connection-status{font-size:12px;line-height:1.5;color:#666;padding:10px 0}.connection-status button{margin-left:8px}
-.brand-initial{display:inline-flex;align-items:center;justify-content:center;width:100%;height:100%;font-family:Georgia,serif;font-weight:700;line-height:1;color:#111}
+.brand-avatar{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--avatar-size);height:var(--avatar-size);border-radius:12px;background:#f3f3f3;overflow:hidden;transition:transform .25s ease,box-shadow .25s ease}
+.brand-avatar img{display:block;width:75%;height:75%;object-fit:contain}
+.brand-avatar--claude{background:#f9eee9}.brand-avatar--claude img{width:79%;height:79%}
+.brand-avatar--chatgpt{background:#10a37f}.brand-avatar--chatgpt img{width:70%;height:70%}
+.brand-avatar--gemini{background:#eef5ff}.brand-avatar--gemini img{width:81%;height:81%}
+.brand-avatar--kimi{background:#e9f2ff}.brand-avatar--kimi img{width:77%;height:77%}
+.brand-initial{font-family:Georgia,serif;font-weight:700;line-height:1;color:#111}
+.product-card:hover .brand-avatar{transform:rotate(-5deg) scale(1.05);box-shadow:0 8px 15px #00000012}
+@media(max-width:600px){.card-brand .brand-avatar{width:38px;height:38px}}
+@media(prefers-reduced-motion:reduce){.brand-avatar{transition:none}.product-card:hover .brand-avatar{transform:none}}
 .card-caption,.card-bottom small,.availability,.catalog-note,.site-footer,.legal-tabs button{color:#555}
 .card-bottom small,.availability,.catalog-note,.legal-tabs button{font-size:12px}
 .legal-tabs .selected{color:#fff}

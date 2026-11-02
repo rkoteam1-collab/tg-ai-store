@@ -1,0 +1,1 @@
+Claude, Gemini, Kimi and OpenAI SVG marks were sourced from [Lobe Icons](https://github.com/lobehub/lobe-icons) (MIT license). The OpenAI mark is recolored white for contrast on the ChatGPT green tile. Brand names and marks belong to their respective owners; their use identifies services and does not imply an official partnership.
