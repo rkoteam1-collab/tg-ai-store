@@ -4,8 +4,18 @@ import {generateReply, providerConfigured} from './providers.js';
 
 export const CHAT_WEBHOOK_PATH = '/api/chat/telegram/webhook';
 const labels = {openai:'ChatGPT', claude:'Claude', gemini:'Gemini'};
+export const CHAT_MENU = Object.freeze({model:'Сменить модель',balance:'Остаток токенов',mode:'Чат / изображения'});
+const mainKeyboard = {reply_markup:{keyboard:[[CHAT_MENU.model,CHAT_MENU.balance],[CHAT_MENU.mode]],resize_keyboard:true,is_persistent:true}};
 const display = account => `${Number(account.balance).toLocaleString('ru-RU')} токенов`;
 const privateChat = ctx => ctx.chat?.type === 'private' && Number.isSafeInteger(ctx.from?.id);
+
+function modelButtons(config) {
+  const available=PROVIDERS.filter(provider=>config.CHAT_DEMO_MODE==='true'||providerConfigured(provider,config));
+  return {reply_markup:{inline_keyboard:available.map(provider=>[{
+    text:config.CHAT_DEMO_MODE==='true'?`${labels[provider]} · тест`:`${labels[provider]} · ${String(config[{openai:'OPENAI_MODEL',claude:'ANTHROPIC_MODEL',gemini:'GEMINI_MODEL'}[provider]]).slice(0,45)}`,
+    callback_data:`model:${provider}`,
+  }])}};
+}
 
 async function sendLong(ctx, value) {
   let text = value;
@@ -32,14 +42,17 @@ export function createChatBot({token,ledger,config,fetchImpl=fetch}) {
     return ctx.reply('Код не найден или выпущен для другого Telegram-аккаунта. Проверьте символы и аккаунт, с которого купили пакет.');
   }
 
-  bot.start(ctx => privateChat(ctx) && ctx.reply('AIshopify Chat. Один пакет — 1 000 000 общих токенов для ChatGPT, Claude и Gemini. Покупка пакета пока недоступна.\n\nКогда вы получите код, отправьте его сюда одним сообщением. Затем выберите модель командой /model и пишите сообщения.\n\n/balance — остаток\n/last — последний ответ\n/new — новый диалог\n/paysupport — поддержка'));
-  bot.command('help', ctx => privateChat(ctx) && ctx.reply('Отправьте код покупки одним сообщением или /redeem КОД. Потом выберите модель: /model. Остаток: /balance. Новый диалог: /new.'));
+  bot.start(ctx => privateChat(ctx) && ctx.reply('AIshopify GPT. Один пакет — 1 000 000 общих токенов для ChatGPT, Claude и Gemini. Покупка пакета пока недоступна.\n\nКогда вы получите код, отправьте его сюда одним сообщением. Для выбора модели и проверки баланса используйте кнопки ниже.\n\n/last — последний ответ\n/new — новый диалог\n/paysupport — поддержка',mainKeyboard));
+  bot.command('help', ctx => privateChat(ctx) && ctx.reply('Отправьте код покупки одним сообщением или /redeem КОД. Выберите модель и проверьте остаток кнопками ниже. Новый диалог: /new.',mainKeyboard));
+  bot.command('menu', ctx => privateChat(ctx) && ctx.reply('Основные действия — на клавиатуре ниже.',mainKeyboard));
   bot.command('paysupport', ctx => privateChat(ctx) && ctx.reply('По вопросам оплаты и доступа: @MaximRkoTeam. Укажите номер покупки. Не присылайте пароли и данные карты.'));
-  bot.command('balance', async ctx => {
+  async function showBalance(ctx) {
     if (!privateChat(ctx)) return;
     const account = await ledger.account(ctx.from.id);
     await ctx.reply(`Остаток: ${display(account)}. Модель: ${labels[account.provider] || labels.openai}.${account.debt ? '\nЕсть перерасход токенов, обратитесь в поддержку.' : ''}`);
-  });
+  }
+  bot.command('balance',showBalance);
+  bot.hears(CHAT_MENU.balance,showBalance);
   bot.command('last', async ctx => {
     if (!privateChat(ctx)) return;
     const last = await ledger.lastAnswer(ctx.from.id);
@@ -47,14 +60,31 @@ export function createChatBot({token,ledger,config,fetchImpl=fetch}) {
     await sendLong(ctx,last.answer);
     await ctx.reply(`За этот ответ списано ${Number(last.charged).toLocaleString('ru-RU')} токенов.`);
   });
-  bot.command('model', ctx => privateChat(ctx) && ctx.reply('Выберите модель:', {reply_markup:{inline_keyboard:[PROVIDERS.map(provider => ({text:labels[provider],callback_data:`model:${provider}`}))]}}));
+  const showModels=ctx=>privateChat(ctx)&&ctx.reply('Выберите доступную модель:',modelButtons(config));
+  bot.command('model',showModels);
+  bot.hears(CHAT_MENU.model,showModels);
+  const showModes=ctx=>privateChat(ctx)&&ctx.reply('Выберите режим:',{reply_markup:{inline_keyboard:[
+    [{text:'Чат',callback_data:'mode:chat'},{text:'Изображения',callback_data:'mode:image'}],
+  ]}});
+  bot.command('mode',showModes);
+  bot.hears(CHAT_MENU.mode,showModes);
+  bot.action('mode:chat',async ctx=>{
+    if(!privateChat(ctx))return ctx.answerCbQuery();
+    await ctx.answerCbQuery('Режим чата');
+    await ctx.reply('Режим чата. Выберите модель для ответа:',modelButtons(config));
+  });
+  bot.action('mode:image',async ctx=>{
+    if(!privateChat(ctx))return ctx.answerCbQuery();
+    await ctx.answerCbQuery('Изображения пока недоступны');
+    await ctx.reply('Генерировать изображения через: пока нет подключённых ИИ. Этот режим появится после подключения API. Токены не списаны.',mainKeyboard);
+  });
   bot.action(/^model:(openai|claude|gemini)$/, async ctx => {
     if (!privateChat(ctx)) return ctx.answerCbQuery();
     const provider = ctx.match[1];
     if (config.CHAT_DEMO_MODE !== 'true' && !providerConfigured(provider, config)) return ctx.answerCbQuery('Модель пока не подключена');
     await ledger.chooseProvider(ctx.from.id, provider);
     await ctx.answerCbQuery(`Выбрана модель ${labels[provider]}`);
-    await ctx.reply(`Теперь отвечает ${labels[provider]}. Напишите сообщение.`);
+    await ctx.reply(`Выбрана модель ${labels[provider]}. Теперь можете написать сообщение.`,mainKeyboard);
   });
   bot.command('new', async ctx => {
     if (!privateChat(ctx)) return;

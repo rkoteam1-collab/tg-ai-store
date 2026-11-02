@@ -4,7 +4,7 @@ import {newDb} from 'pg-mem';
 import {createChatLedger} from './chat/ledger.js';
 import {PACK_TOKENS,codeForPayment,providerUsage,validCode} from './chat/core.js';
 import {generateReply} from './chat/providers.js';
-import {createChatBot} from './chat/bot.js';
+import {CHAT_MENU,createChatBot} from './chat/bot.js';
 import {createApp} from './app.js';
 
 async function fixture() {
@@ -82,6 +82,7 @@ test('demo bot excludes outsiders and owner can redeem and chat with shared bala
   bot.context.telegram={
     sendMessage:async(chatId,text,extra)=>{sent.push({method:'sendMessage',payload:{chat_id:chatId,text,...extra}});return {message_id:sent.length,date:0,chat:{id:chatId,type:'private'}};},
     sendChatAction:async()=>true,
+    answerCbQuery:async()=>true,
   };
   const update=(id,messageId,text)=>({update_id:messageId+id*1000,message:{message_id:messageId,date:0,chat:{id,type:'private'},from:{id,is_bot:false,first_name:'Test'},text,...(text.startsWith('/')?{entities:[{offset:0,length:text.split(' ')[0].length,type:'bot_command'}]}:{})}});
   await bot.handleUpdate(update(200,1,'/start'));
@@ -90,16 +91,33 @@ test('demo bot excludes outsiders and owner can redeem and chat with shared bala
   await bot.handleUpdate(update(200,3,'Hello'));
   assert.equal((await ledger.account(200)).balance,0);
   assert.equal(sent.length,1);
+  await bot.handleUpdate(update(100,0,'/start'));
+  assert.deepEqual(sent.at(-1).payload.reply_markup.keyboard,[[CHAT_MENU.model,CHAT_MENU.balance],[CHAT_MENU.mode]]);
   await bot.handleUpdate(update(100,1,'/demo'));
   const code=sent.at(-1).payload.text.match(/[A-Za-z0-9]{18}/)?.[0];
   assert.equal(validCode(code),true);
   await bot.handleUpdate(update(100,2,code));
   assert.equal((await ledger.account(100)).balance,PACK_TOKENS);
-  await bot.handleUpdate(update(100,3,'Hello'));
+  await bot.handleUpdate(update(100,3,CHAT_MENU.balance));
+  assert.match(sent.at(-1).payload.text,/1\s000\s000 токенов/);
+  await bot.handleUpdate(update(100,4,CHAT_MENU.model));
+  assert.equal(sent.at(-1).payload.reply_markup.inline_keyboard.length,3);
+  assert.match(sent.at(-1).payload.reply_markup.inline_keyboard[1][0].text,/Claude/);
+  await bot.handleUpdate({update_id:100005,callback_query:{id:'cb-1',from:{id:100,is_bot:false,first_name:'Test'},message:{message_id:10,date:0,chat:{id:100,type:'private'}},data:'model:claude'}});
+  assert.equal((await ledger.account(100)).provider,'claude');
+  await bot.handleUpdate(update(100,5,CHAT_MENU.mode));
+  assert.deepEqual(sent.at(-1).payload.reply_markup.inline_keyboard[0].map(button=>button.text),['Чат','Изображения']);
+  const beforeImage=(await ledger.account(100)).balance;
+  await bot.handleUpdate({update_id:100006,callback_query:{id:'cb-2',from:{id:100,is_bot:false,first_name:'Test'},message:{message_id:11,date:0,chat:{id:100,type:'private'}},data:'mode:image'}});
+  assert.match(sent.at(-1).payload.text,/пока нет подключённых ИИ/);
+  assert.equal((await ledger.account(100)).balance,beforeImage);
+  await bot.handleUpdate({update_id:100007,callback_query:{id:'cb-3',from:{id:100,is_bot:false,first_name:'Test'},message:{message_id:11,date:0,chat:{id:100,type:'private'}},data:'mode:chat'}});
+  assert.equal(sent.at(-1).payload.reply_markup.inline_keyboard.length,3);
+  await bot.handleUpdate(update(100,8,'Hello'));
   assert.equal((await ledger.account(100)).balance<PACK_TOKENS,true);
   assert.match(sent.at(-1).payload.text,/Списано/);
   const before=(await ledger.account(100)).balance;
-  await bot.handleUpdate(update(100,4,'/last'));
+  await bot.handleUpdate(update(100,9,'/last'));
   assert.equal((await ledger.account(100)).balance,before);
   assert.match(sent.at(-1).payload.text,/За этот ответ списано/);
 });
