@@ -7,7 +7,7 @@ export default function ProductCard({product,index=0}) {
  const quantity=cart.find(i=>i.id===product.id)?.quantity||0;
  return <article className="product-card" style={{'--delay':Math.min(index,7)*55+'ms'}}>
    <button className="product-open" onClick={()=>setSelectedProduct(product)} aria-label={'Подробнее: '+product.name}>
-     <div className="card-brand"><BrandLogo logo={product.logo} size={42}/><ArrowUpRight className="detail-arrow" size={17}/></div>
+     <div className="card-brand"><BrandLogo logo={product.logo} size={28}/><ArrowUpRight className="detail-arrow" size={17}/></div>
      <h3>{product.name}</h3><p className="model-line">{product.model}</p>
      <p className="card-caption">{product.tagline}</p>
    </button>

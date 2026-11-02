@@ -15,7 +15,7 @@ export default function ChatPackModal({onClose}) {
       <h3>1 000 000 токенов</h3>
       <p>Единый чат с моделями OpenAI, Anthropic и Google. Переключайтесь между провайдерами и оплачивайте фактическое использование после запуска сервиса.</p>
       <div className="chat-pack-providers" aria-label="Планируемые провайдеры">
-        {providers.map(provider=><div key={provider.name}><BrandLogo logo={provider.logo} size={36}/><span>{provider.name}</span></div>)}
+        {providers.map(provider=><div key={provider.name}><BrandLogo logo={provider.logo} size={28}/><span>{provider.name}</span></div>)}
       </div>
       <div className="chat-pack-estimates">
         <div><strong>≈ 500–1 000</strong><span>коротких обменов сообщениями, если на запрос и ответ уходит 1–2 тыс. токенов</span></div>
