@@ -6,11 +6,25 @@ import {createApp} from './app.js';
 import {createStore} from './storage.js';
 import {configureMenus,menuRepairMiddleware,startStore} from './launch.js';
 import {webhookSecret,TELEGRAM_WEBHOOK_PATH} from './bot-webhook.js';
+import {createChatLedger} from './chat/ledger.js';
+import {createChatBot,CHAT_WEBHOOK_PATH} from './chat/bot.js';
+import {providerConfigured} from './chat/providers.js';
 const root=path.dirname(fileURLToPath(import.meta.url)), config=process.env;
 const store=createStore(path.resolve(config.DATA_DIR||path.join(root,'data')),path.join(root,'data/products.json'),{ephemeralInventory:config.RENDER==='true'});
+let chatLedger=null;
+if(config.CHAT_DATABASE_URL&&config.CHAT_CODE_SECRET){
+  try{
+    chatLedger=createChatLedger({connectionString:config.CHAT_DATABASE_URL,codeSecret:config.CHAT_CODE_SECRET});
+    await chatLedger.migrate();
+    await chatLedger.recoverStale();
+  }catch(error){console.error('Chat database unavailable',error.message);await chatLedger?.close().catch(()=>{});chatLedger=null;}
+}
 const bot=config.BOT_TOKEN ? new Telegraf(config.BOT_TOKEN) : null;
 const telegramWebhook=bot&&config.BOT_ENABLED!=='false'&&config.BOT_TRANSPORT!=='polling'?bot.webhookCallback(TELEGRAM_WEBHOOK_PATH,{secretToken:webhookSecret(config.BOT_TOKEN)}):undefined;
-const app=createApp({config,store,telegram:bot?.telegram,distPath:path.join(root,'../dist'),telegramWebhook});
+const chatModelsReady=['openai','claude','gemini'].every(provider=>providerConfigured(provider,config));
+const chatBot=chatLedger&&config.CHAT_BOT_TOKEN&&(config.CHAT_DEMO_MODE==='true'||chatModelsReady)?createChatBot({token:config.CHAT_BOT_TOKEN,ledger:chatLedger,config}):null;
+const chatWebhook=chatBot&&config.CHAT_BOT_TRANSPORT!=='polling'?chatBot.webhookCallback(CHAT_WEBHOOK_PATH,{secretToken:webhookSecret(config.CHAT_BOT_TOKEN)}):undefined;
+const app=createApp({config,store,telegram:bot?.telegram,distPath:path.join(root,'../dist'),telegramWebhook,chatWebhook});
 const server=app.listen(Number(config.PORT||3000),'0.0.0.0',()=>console.log(`AIshopify listening on ${config.PORT||3000}`));
 let shuttingDown=false;
 if (bot && config.BOT_ENABLED!=='false') {
@@ -32,8 +46,21 @@ if (bot && config.BOT_ENABLED!=='false') {
   }
   connect();
 }
+if(chatBot){
+  async function connectChat(){
+    try{
+      if(chatWebhook){
+        const endpoint=new URL(CHAT_WEBHOOK_PATH,config.BACKEND_URL||config.WEBAPP_URL||'https://tg-ai-store.onrender.com').href;
+        await chatBot.telegram.setWebhook(endpoint,{secret_token:webhookSecret(config.CHAT_BOT_TOKEN),allowed_updates:['message','callback_query'],drop_pending_updates:false});
+      }else await chatBot.launch();
+      console.log('AIshopify Chat bot configured');
+    }catch(error){console.error('AIshopify Chat bot setup failed',error.response?.error_code||'network');if(!shuttingDown)setTimeout(connectChat,5000).unref();}
+  }
+  connectChat();
+}
 for (const signal of ['SIGINT','SIGTERM']) process.once(signal,()=>{
   shuttingDown=true;
   try {if (bot && config.BOT_ENABLED!=='false') bot.stop(signal);} catch {}
-  server.close(()=>process.exit(0));
+  try {chatBot?.stop(signal);} catch {}
+  server.close(async()=>{await chatLedger?.close().catch(()=>{});process.exit(0);});
 });

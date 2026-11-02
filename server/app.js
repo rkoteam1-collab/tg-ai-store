@@ -7,6 +7,7 @@ import {equalSecret,opaqueToken,telegramUser,validateProducts,validatePromos,cal
 import {buildReceipt} from './receipt.js';
 import {APP_RELEASE,STATIC_ORIGIN} from './launch.js';
 import {webhookSecret,TELEGRAM_WEBHOOK_PATH} from './bot-webhook.js';
+import {CHAT_WEBHOOK_PATH} from './chat/bot.js';
 import {BOOTSTRAP_HASH} from './bootstrap.js';
 
 function gatewayLink(value) {
@@ -18,7 +19,7 @@ function gatewayLink(value) {
   return typeof url==='string' && url.startsWith('https://') ? url : undefined;
 }
 
-export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegramWebhook}) {
+export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegramWebhook,chatWebhook}) {
   const app=express(), sessions=new Map(), limits=new Map(), reconciling=new Map();
   app.disable('x-powered-by');
   if (config.TRUST_PROXY_HOPS) app.set('trust proxy',Number(config.TRUST_PROXY_HOPS));
@@ -45,6 +46,10 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
     if(!telegramWebhook||!equalSecret(req.get('X-Telegram-Bot-Api-Secret-Token'),webhookSecret(config.BOT_TOKEN)))return res.sendStatus(403);
     return telegramWebhook(req,res,next);
   });
+  app.post(CHAT_WEBHOOK_PATH,rate('chat-telegram',120),(req,res,next)=>{
+    if(!chatWebhook||!equalSecret(req.get('X-Telegram-Bot-Api-Secret-Token'),webhookSecret(config.CHAT_BOT_TOKEN)))return res.sendStatus(403);
+    return chatWebhook(req,res,next);
+  });
   const user=req=>telegramUser(req.get('X-Telegram-Init-Data'),config.BOT_TOKEN);
   function admin(req,res,next) {
     const token=req.get('Authorization')?.replace(/^Bearer /,'');
@@ -53,6 +58,9 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
   }
   function owner(req,order) {const u=user(req);return (u && String(u.id)===String(order.telegramId)) || equalSecret(req.get('X-Order-Token'),order.accessToken);}
   app.get('/api/health',(req,res)=>res.json({ok:true,release:APP_RELEASE,botTransport:telegramWebhook?'webhook':'disabled'}));
+  app.get('/api/chat/offer',(req,res)=>{
+    res.json({available:false,packTokens:1000000,chatBotUsername:'AIshopifyGPT_bot'});
+  });
   const catalogRevision=()=>createHash('sha256').update(JSON.stringify(store.read('products'))).digest('hex');
   app.get('/api/catalog',(req,res)=>res.json({products:store.read('products').filter(p=>p.active!==false),revision:catalogRevision()}));
   app.get('/api/products',(req,res)=>res.json(store.read('products').filter(p=>p.active!==false)));
