@@ -1,0 +1,16 @@
+.git
+.github
+.serena
+node_modules
+dist
+.env
+.env.*
+!/.env.example
+deploy/server.env
+deploy/.env
+*.log
+server/data/orders.json
+server/data/channel_discounts.json
+server/data/promos.json
+server/data/inventory-confirmed.json
+server/data/*.tmp

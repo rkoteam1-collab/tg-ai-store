@@ -9,6 +9,8 @@ import {APP_RELEASE,STATIC_ORIGIN} from './launch.js';
 import {webhookSecret,TELEGRAM_WEBHOOK_PATH} from './bot-webhook.js';
 import {CHAT_WEBHOOK_PATH} from './chat/bot.js';
 import {BOOTSTRAP_HASH} from './bootstrap.js';
+import {PRIVACY_CONSENT_VERSION,PRIVACY_CONSENT_TEXT} from '../shared/privacyConsent.js';
+import {PAID_PAYMENT_STATUSES,CLOSED_UNPAID_PAYMENT_STATUSES} from './payment-status.js';
 
 function gatewayLink(value) {
   if (typeof value === 'string') {
@@ -57,7 +59,7 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
     return res.status(401).json({message:'Войдите в панель управления'});
   }
   function owner(req,order) {const u=user(req);return (u && String(u.id)===String(order.telegramId)) || equalSecret(req.get('X-Order-Token'),order.accessToken);}
-  app.get('/api/health',(req,res)=>res.json({ok:true,release:APP_RELEASE,botTransport:telegramWebhook?'webhook':'disabled'}));
+  app.get('/api/health',(req,res)=>res.json({ok:true,release:APP_RELEASE,privacyConsentVersion:PRIVACY_CONSENT_VERSION,botTransport:telegramWebhook?'webhook':'disabled'}));
   app.get('/api/chat/offer',(req,res)=>{
     res.json({available:false,packTokens:1000000,chatBotUsername:'AIshopifyGPT_bot'});
   });
@@ -67,7 +69,7 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
   app.post('/api/admin/verify',rate('login',5,900000),(req,res)=>{
     const u=user(req), signed=u && config.ADMIN_ID && String(u.id)===String(config.ADMIN_ID);
     const pin=config.ADMIN_PIN?.length>=4 && equalSecret(req.body?.pin,config.ADMIN_PIN);
-    if (!signed && !pin) return res.status(401).json({success:false,message:'Неверные данные входа'});
+    if (!signed || !pin) return res.status(401).json({success:false,message:'Откройте магазин через Telegram владельца и проверьте PIN'});
     for (const [k,v] of sessions) if (v<=Date.now()) sessions.delete(k);
     const token=opaqueToken(); sessions.set(token,Date.now()+3600000); res.json({success:true,token});
   });
@@ -111,9 +113,9 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
   app.post('/api/payments/create',rate('payment',5),async(req,res)=>{
     if (!config.ALFA_SBP_ID || !config.ALFA_SBP_KEY) return res.status(503).json({message:'Платёжный сервис временно недоступен'});
     const b=req.body||{},u=user(req);
-    if(config.RENDER==='true'&&!u)return res.status(401).json({message:'Для связи со специалистом откройте магазин в Telegram и повторите заказ.'});
-    if (req.get('X-Telegram-Init-Data') && !u) return res.status(401).json({message:'Сессия Telegram истекла. Откройте магазин заново.'});
+    if (!u) return res.status(401).json({message:'Откройте магазин из бота @AIshopify1_bot в Telegram. Если окно уже открыто, закройте его, отправьте боту /start и откройте магазин снова.'});
     if (typeof b.email!=='string' || b.email.length>254 || !/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(b.email) || b.acceptOffer!==true) return res.status(400).json({message:'Укажите email и примите условия заказа'});
+    if (b.acceptPrivacyConsent!==true || b.privacyConsentVersion!==PRIVACY_CONSENT_VERSION) return res.status(400).json({message:'Обновите приложение: закройте окно, отправьте боту /start и откройте магазин снова. Затем примите отдельное согласие на обработку данных.'});
     let order;
     try {
       let channelPercent=0;
@@ -127,17 +129,18 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
       if(!Array.isArray(b.items)||b.items.some(i=>!available.some(p=>p.id===i?.id&&!p.priceOnRequest&&p.inStock&&p.stock>=i.quantity)))return res.status(409).json({message:'Товар закончился или отключён. Обновите каталог. Счёт не создан.'});
       const quote=calculateOrder(b.items,available,b.promoCode,channelPercent,store.read('promos'));
       if (Number(b.expectedAmount)!==quote.amount) return res.status(409).json({message:'Цена изменилась. Обновите каталог и проверьте итог.'});
-      order={id:`AI-${randomUUID()}`,accessToken:opaqueToken(),...quote,email:b.email.trim(),telegramId:u?.id||null,telegramUsername:typeof u?.username==='string'?u.username:null,status:'creating',inventoryReserved:true,termsVersion:'2026-10-21',createdAt:new Date().toISOString()};
+      const createdAt=new Date().toISOString();
+      order={id:`AI-${randomUUID()}`,accessToken:opaqueToken(),...quote,email:b.email.trim(),telegramId:u?.id||null,telegramUsername:typeof u?.username==='string'?u.username:null,status:'creating',inventoryReserved:true,termsVersion:'2026-11-03',privacyConsent:{version:PRIVACY_CONSENT_VERSION,text:PRIVACY_CONSENT_TEXT,textSha256:createHash('sha256').update(PRIVACY_CONSENT_TEXT).digest('hex'),acceptedAt:createdAt},createdAt};
       store.saveOrder(order);
       const client_receipt=buildReceipt(order,config);
       const r=await fetchImpl(gateway,{method:'POST',signal:AbortSignal.timeout(15000),headers:{Authorization:auth(),'Content-Type':'application/json'},body:JSON.stringify({amount:quote.amount.toFixed(2),client_payment_id:order.id,method:'sbp',description:`Заказ ${order.id}`,client_receipt,metadata:{email:order.email,order_id:order.id}})});
       const data=await r.json();if (!r.ok || data.error) throw new Error('Gateway rejected');
       const p=data.data||data,qrUrl=gatewayLink(p?.payment_qr_urls),qrImage=gatewayLink(p?.payment_qr_images);
       if (!p?.id || !/^https:\/\//.test(qrUrl)) throw new Error('Invalid gateway response');
-      Object.assign(order,{status:'pending',itpayId:p.id,qrUrl,qrImage,fiscalizationRequested:!!client_receipt,kassaConnected:p.kassa_connected===true});store.saveOrder(order);
+      Object.assign(order,{status:'pending',statusChangedAt:new Date().toISOString(),itpayId:p.id,qrUrl,qrImage,fiscalizationRequested:!!client_receipt,kassaConnected:p.kassa_connected===true});store.saveOrder(order);
       res.json({success:true,orderId:order.id,accessToken:order.accessToken,amount:order.amount,qrUrl,qrImage});
     } catch {
-      if (order) {order.status='review';store.saveOrder(order);return res.status(502).json({message:`Не удалось подтвердить создание счёта. Обратитесь в поддержку с номером ${order.id}, не повторяйте оплату.`});}
+      if (order) {order.status='review';order.statusChangedAt=new Date().toISOString();store.saveOrder(order);return res.status(502).json({message:`Не удалось подтвердить создание счёта. Обратитесь в поддержку с номером ${order.id}, не повторяйте оплату.`});}
       res.status(400).json({message:'Проверьте корзину, остатки и скидки'});
     }
   });
@@ -152,10 +155,10 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
       order=store.read('orders').find(o=>o.id===id);
       order.receipts=Array.isArray(p.receipts)?p.receipts.map(r=>({id:r.id,state:r.state,url:gatewayLink(r.link_to_receipt)})):order.receipts||[];
       store.saveOrder(order);
-      if (['paid','completed'].includes(p.status) && order.status!=='paid') {
-        order.status='paid';order.paidAt=new Date().toISOString();store.saveOrder(order);
+      if (PAID_PAYMENT_STATUSES.includes(p.status) && order.status!=='paid') {
+        order.status='paid';order.paidAt=new Date().toISOString();order.statusChangedAt=order.paidAt;store.saveOrder(order);
         if (telegram && config.ADMIN_ID) try {await telegram.sendMessage(config.ADMIN_ID,`Оплачен заказ ${order.id}. Сумма ${order.amount} ₽. Покупатель: ${order.telegramUsername?'@'+order.telegramUsername:order.telegramId||'не указан'}; Telegram ID: ${order.telegramId||'не указан'}. Свяжитесь после оплаты; срок подключения согласуется после оплаты. Откройте защищённую панель заказов.`);} catch {console.error('Order notification failed');}
-      } else if (order.status!=='paid' && ['cancelled','rejected','error'].includes(p.status)) {order.status=p.status;store.saveOrder(order);}
+      } else if (order.status!=='paid' && CLOSED_UNPAID_PAYMENT_STATUSES.includes(p.status) && (order.status!==p.status || !order.statusChangedAt)) {order.status=p.status;order.statusChangedAt=new Date().toISOString();store.saveOrder(order);}
       return order;
     })();
     reconciling.set(id,work);try{return await work;}finally{reconciling.delete(id);}

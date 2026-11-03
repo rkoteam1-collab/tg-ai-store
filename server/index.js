@@ -11,6 +11,12 @@ import {createChatBot,CHAT_WEBHOOK_PATH} from './chat/bot.js';
 import {providerConfigured} from './chat/providers.js';
 const root=path.dirname(fileURLToPath(import.meta.url)), config=process.env;
 const store=createStore(path.resolve(config.DATA_DIR||path.join(root,'data')),path.join(root,'data/products.json'),{ephemeralInventory:config.RENDER==='true'});
+function maintainPrivacy(){
+  try {store.redactExpiredContacts();} catch(error) {console.error('Order contact retention failed',error.message);}
+}
+maintainPrivacy();
+const privacyTimer=setInterval(maintainPrivacy,24*60*60*1000);
+privacyTimer.unref();
 let chatLedger=null;
 if(config.CHAT_DATABASE_URL&&config.CHAT_CODE_SECRET){
   try{
@@ -60,6 +66,7 @@ if(chatBot){
 }
 for (const signal of ['SIGINT','SIGTERM']) process.once(signal,()=>{
   shuttingDown=true;
+  clearInterval(privacyTimer);
   try {if (bot && config.BOT_ENABLED!=='false') bot.stop(signal);} catch {}
   try {chatBot?.stop(signal);} catch {}
   server.close(async()=>{await chatLedger?.close().catch(()=>{});process.exit(0);});

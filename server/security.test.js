@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createHmac} from 'node:crypto';
+import {createHmac,createHash} from 'node:crypto';
 import {createApp} from './app.js';
 import {telegramUser,calculateOrder,validateProducts} from './security.js';
 import {buildReceipt} from './receipt.js';
+import {PRIVACY_CONSENT_VERSION,PRIVACY_CONSENT_TEXT} from '../shared/privacyConsent.js';
+import {CLOSED_UNPAID_PAYMENT_STATUSES} from './payment-status.js';
 
 const product={id:'claude-pro',name:'Claude Pro',price:2790,stock:10,inStock:true,features:[]};
 const botToken='test-token-not-real';
@@ -50,15 +52,42 @@ async function fixture(t,extra={}) {
  await new Promise(r=>server.once('listening',r));t.after(()=>new Promise(r=>server.close(r)));
  const url='http://127.0.0.1:'+server.address().port;
  async function req(route,body,headers={}){const r=await fetch(url+route,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json',...headers},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,data:await r.json()};}
- return {url,db,req,state:(status,mismatch=false)=>{gatewayStatus=status;wrongAmount=mismatch;},stats:()=>({posts,notifies})};
+ async function checkout(body,headers={}){return req('/api/payments/create',body,{'X-Telegram-Init-Data':signed(),...headers});}
+ return {url,db,req,checkout,state:(status,mismatch=false)=>{gatewayStatus=status;wrongAmount=mismatch;},stats:()=>({posts,notifies})};
 }
-const valid={email:'buyer@example.com',acceptOffer:true,expectedAmount:2790,items:[{id:'claude-pro',quantity:1}]};
+const valid={email:'buyer@example.com',acceptOffer:true,acceptPrivacyConsent:true,privacyConsentVersion:PRIVACY_CONSENT_VERSION,expectedAmount:2790,items:[{id:'claude-pro',quantity:1}]};
+test('Health advertises the checkout consent version for split-deploy detection',async t=>{
+ const f=await fixture(t);
+ const health=await f.req('/api/health');
+ assert.equal(health.status,200);
+ assert.equal(health.data.privacyConsentVersion,PRIVACY_CONSENT_VERSION);
+});
+test('Separate privacy consent is required and its exact text/version/time are recorded before payment',async t=>{
+ const f=await fixture(t);
+ const stale=await f.checkout({...valid,acceptPrivacyConsent:false});
+ assert.equal(stale.status,400);assert.match(stale.data.message,/\/start/);
+ assert.equal((await f.checkout({...valid,acceptPrivacyConsent:'true'})).status,400);
+ assert.equal((await f.checkout({...valid,privacyConsentVersion:'old'})).status,400);
+ assert.equal(f.stats().posts,0);assert.equal(f.db.orders.length,0);
+ const created=await f.checkout(valid);
+ assert.equal(created.status,200);
+ const consent=f.db.orders[0].privacyConsent;
+ assert.equal(consent.version,PRIVACY_CONSENT_VERSION);
+ assert.equal(consent.text,PRIVACY_CONSENT_TEXT);
+ assert.equal(consent.textSha256,createHash('sha256').update(PRIVACY_CONSENT_TEXT).digest('hex'));
+ assert.equal(consent.acceptedAt,f.db.orders[0].createdAt);
+ assert.equal(f.db.orders[0].termsVersion,PRIVACY_CONSENT_VERSION);
+});
 test('Catalog and orders require server-issued admin session, forged frontend flags do not count',async t=>{
  const f=await fixture(t);
  assert.equal((await f.req('/api/products',[product])).status,401);
  assert.equal((await f.req('/api/admin/orders',{})).status,401);
- assert.equal((await f.req('/api/admin/verify',{pin:'7788'})).status,401);
- const login=await f.req('/api/admin/verify',{pin:'test-password-long'});
+ assert.equal((await f.req('/api/admin/verify',{pin:'test-password-long'})).status,401);
+ assert.equal((await f.req('/api/admin/verify',{pin:'test-password-long'},{'X-Telegram-Init-Data':signed(43)})).status,401);
+ assert.equal((await f.req('/api/admin/verify',{pin:'test-password-long'},{'X-Telegram-Init-Data':signed(42,4000)})).status,401);
+ assert.equal((await f.req('/api/admin/verify',{pin:'7788'},{'X-Telegram-Init-Data':signed()})).status,401);
+ const login=await f.req('/api/admin/verify',{pin:'test-password-long'},{'X-Telegram-Init-Data':signed()});
+ assert.equal(login.status,200);
  const h={Authorization:'Bearer '+login.data.token,'X-Catalog-Revision':(await f.req('/api/catalog')).data.revision};
  assert.equal((await f.req('/api/products',[product],h)).status,200);
  assert.equal((await f.req('/api/products',[{...product,price:0}],h)).status,400);
@@ -67,13 +96,13 @@ test('Catalog and orders require server-issued admin session, forged frontend fl
 });
 test('Client total manipulation and fake identity cannot create underpriced payment',async t=>{
  const f=await fixture(t);
- assert.equal((await f.req('/api/payments/create',{...valid,expectedAmount:1,amount:1})).status,409);
- const created=await f.req('/api/payments/create',{...valid,telegramId:42,username:'admin'});
- assert.equal(created.status,200);assert.equal(created.data.amount,2790);assert.equal(f.db.orders[0].telegramId,null);
+ assert.equal((await f.checkout({...valid,expectedAmount:1,amount:1})).status,409);
+ const created=await f.checkout({...valid,telegramId:42,username:'admin'});
+ assert.equal(created.status,200);assert.equal(created.data.amount,2790);assert.equal(f.db.orders[0].telegramId,42);assert.equal(f.db.orders[0].telegramUsername,null);
  assert.equal(f.stats().posts,1);
 });
 test('Order status is private, callback is reconciled against bank, paid notification is idempotent',async t=>{
- const f=await fixture(t),created=(await f.req('/api/payments/create',valid)).data;
+ const f=await fixture(t),created=(await f.checkout(valid)).data;
  const route='/api/payments/status/'+created.orderId,h={'X-Order-Token':created.accessToken};
  assert.equal((await f.req(route)).status,404);
  assert.equal((await f.req(route,undefined,{'X-Order-Token':'fake'})).status,404);
@@ -89,18 +118,46 @@ test('Order status is private, callback is reconciled against bank, paid notific
  const status=(await f.req(route,undefined,h)).data;
  assert.equal(status.status,'paid');assert.equal(status.email,undefined);assert.equal(status.order,undefined);
 });
+test('Repeated bank cancellation does not reset the contact-retention clock',async t=>{
+ const f=await fixture(t),created=(await f.checkout(valid)).data;
+ f.state('cancelled');
+ const route='/api/payments/status/'+created.orderId,headers={'X-Order-Token':created.accessToken};
+ assert.equal((await f.req(route,undefined,headers)).data.status,'cancelled');
+ const first=f.db.orders[0].statusChangedAt;
+ assert.ok(first);
+ await f.req(route,undefined,headers);
+ assert.equal(f.db.orders[0].statusChangedAt,first);
+});
+test('Every documented closed-unpaid bank status frees stock, unsupported statuses stay reserved',async t=>{
+ for(const status of CLOSED_UNPAID_PAYMENT_STATUSES){
+  const f=await fixture(t);f.db.products[0].stock=1;
+  const created=(await f.checkout(valid)).data;
+  f.state(status);
+  const result=await f.req('/api/payments/status/'+created.orderId,undefined,{'X-Order-Token':created.accessToken});
+  assert.equal(result.data.status,status);
+  assert.ok(f.db.orders[0].statusChangedAt);
+  assert.equal((await f.checkout(valid)).status,200);
+ }
+ const f=await fixture(t);f.db.products[0].stock=1;
+ const created=(await f.checkout(valid)).data;
+ for(const unsupported of ['failed','expired','canceled']){
+  f.state(unsupported);
+  assert.equal((await f.req('/api/payments/status/'+created.orderId,undefined,{'X-Order-Token':created.accessToken})).data.status,'pending');
+ }
+ assert.equal((await f.checkout(valid)).status,409);
+});
 test('Subscription checks do not consume discount; completed payment consumes it',async t=>{
  const f=await fixture(t),h={'X-Telegram-Init-Data':signed()};
  assert.equal((await f.req('/api/check-subscription',{},h)).data.success,true);
  assert.equal((await f.req('/api/check-subscription',{},h)).data.success,true);
  assert.equal(f.db.channel_discounts.length,0);
- const created=(await f.req('/api/payments/create',{...valid,channelDiscount:true,expectedAmount:2650},h)).data;
+ const created=(await f.checkout({...valid,channelDiscount:true,expectedAmount:2650},h)).data;
  assert.ok(created.orderId);f.state('paid');await f.req('/api/payments/status/'+created.orderId,undefined,h);
  assert.equal((await f.req('/api/check-subscription',{},h)).data.alreadyClaimed,true);
 });
 test('Reserved stock cannot be oversold by concurrent requests',async t=>{
  const f=await fixture(t);f.db.products[0].stock=1;
- const replies=await Promise.all([f.req('/api/payments/create',valid),f.req('/api/payments/create',valid)]);
+ const replies=await Promise.all([f.checkout(valid),f.checkout(valid)]);
  assert.deepEqual(replies.map(r=>r.status).sort(),[200,409]);assert.equal(f.stats().posts,1);
 });
 test('Unknown API route is JSON 404, not SPA success',async t=>{
@@ -109,13 +166,13 @@ test('Unknown API route is JSON 404, not SPA success',async t=>{
 test('Admin can create, disable, remove promos; checkout revalidates against storage',async t=>{
  const f=await fixture(t);
  assert.equal((await f.req('/api/admin/promos',[])).status,401);
- const login=await f.req('/api/admin/verify',{pin:'test-password-long'}),h={Authorization:'Bearer '+login.data.token};
+ const login=await f.req('/api/admin/verify',{pin:'test-password-long'},{'X-Telegram-Init-Data':signed()}),h={Authorization:'Bearer '+login.data.token};
  assert.equal((await f.req('/api/admin/promos',[{code:'NEW25',discountPercent:25,active:true}],h)).status,200);
  assert.equal((await f.req('/api/promos/validate',{code:'new25'})).data.discountPercent,25);
- assert.equal((await f.req('/api/payments/create',{...valid,promoCode:'NEW25',expectedAmount:2092})).status,200);
+ assert.equal((await f.checkout({...valid,promoCode:'NEW25',expectedAmount:2092})).status,200);
  await f.req('/api/admin/promos',[{code:'NEW25',discountPercent:25,active:false}],h);
  assert.equal((await f.req('/api/promos/validate',{code:'NEW25'})).status,400);
- assert.equal((await f.req('/api/payments/create',{...valid,promoCode:'NEW25',expectedAmount:2092})).status,400);
+ assert.equal((await f.checkout({...valid,promoCode:'NEW25',expectedAmount:2092})).status,400);
  await f.req('/api/admin/promos',[],h);
  assert.deepEqual((await f.req('/api/admin/promos',undefined,h)).data,[]);
  assert.equal((await f.req('/api/admin/promos',[{code:'BAD',discountPercent:100,active:true}],h)).status,400);
@@ -130,21 +187,25 @@ test('CDN preflight permits only the configured storefront origin',async t=>{
 });
 
 test('Stale admin cannot restore stock; disabled product never creates a bank invoice',async t=>{
- const f=await fixture(t);const login=await f.req('/api/admin/verify',{pin:'test-password-long'});
+ const f=await fixture(t);const login=await f.req('/api/admin/verify',{pin:'test-password-long'},{'X-Telegram-Init-Data':signed()});
  const revision=(await f.req('/api/catalog')).data.revision;
  const headers={Authorization:'Bearer '+login.data.token,'X-Catalog-Revision':revision};
  assert.equal((await f.req('/api/products',[{...product,inStock:false,stock:0}],headers)).status,200);
  assert.equal((await f.req('/api/products',[product],headers)).status,409);
- assert.equal((await f.req('/api/payments/create',valid)).status,409);
+ assert.equal((await f.checkout(valid)).status,409);
  assert.equal(f.stats().posts,0);assert.equal(f.db.orders.length,0);
  assert.equal((await f.req('/api/products')).data[0].inStock,false);
 });
 
-test('Production manual fulfillment requires verified Telegram account before creating invoice',async t=>{
- const f=await fixture(t,{RENDER:'true'});
- assert.equal((await f.req('/api/payments/create',valid)).status,401);assert.equal(f.stats().posts,0);
- assert.equal((await f.req('/api/payments/create',valid,{'X-Telegram-Init-Data':signed()})).status,200);
- assert.equal(f.db.orders[0].telegramId,42);
+test('Payment requires verified Telegram account regardless of Render flag',async t=>{
+ for(const extra of [{},{RENDER:'true'}]){
+  const f=await fixture(t,extra);
+  assert.equal((await f.req('/api/payments/create',valid)).status,401);
+  assert.equal((await f.req('/api/payments/create',valid,{'X-Telegram-Init-Data':signed(42,4000)})).status,401);
+  assert.equal(f.stats().posts,0);
+  assert.equal((await f.checkout(valid)).status,200);
+  assert.equal(f.db.orders[0].telegramId,42);
+ }
 });
 
 test('Combined discounts cannot lower Max checkout below its configured floor, including mixed carts',()=>{
@@ -158,7 +219,7 @@ test('Combined discounts cannot lower Max checkout below its configured floor, i
 
 test('Quote-only products cannot create invoices even if availability is accidentally enabled',async t=>{
  const f=await fixture(t);Object.assign(f.db.products[0],{price:0,minimumPriceRub:0,priceOnRequest:true,inStock:true});
- assert.equal((await f.req('/api/payments/create',{...valid,expectedAmount:0})).status,409);
+ assert.equal((await f.checkout({...valid,expectedAmount:0})).status,409);
  assert.equal(f.stats().posts,0);assert.equal(f.db.orders.length,0);
  assert.throws(()=>calculateOrder(valid.items,f.db.products));
  assert.equal(validateProducts([{...product,price:0,priceOnRequest:true,inStock:false}]),true);

@@ -1,0 +1,38 @@
+services:
+  shop:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    env_file: server.env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATA_DIR: /data/store
+      BACKEND_URL: https://${PUBLIC_HOST:?Set PUBLIC_HOST}
+      WEBAPP_URL: https://${PUBLIC_HOST:?Set PUBLIC_HOST}
+      FRONTEND_URL: https://${PUBLIC_HOST:?Set PUBLIC_HOST}
+      TRUST_PROXY_HOPS: 1
+    volumes:
+      - shop_data:/data/store
+    expose:
+      - "3000"
+    restart: unless-stopped
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:?Set PUBLIC_HOST}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - shop
+    restart: unless-stopped
+
+volumes:
+  shop_data:
+  caddy_data:
+  caddy_config:

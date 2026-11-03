@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
+import {redactExpiredOrderContacts} from './privacy-retention.js';
 // One process, one persistent volume. Corrupt files fail closed.
 export function createStore(directory,seedPath,{ephemeralInventory=false}={}) {
   fs.mkdirSync(directory,{recursive:true});
@@ -26,7 +27,11 @@ export function createStore(directory,seedPath,{ephemeralInventory=false}={}) {
     write('products',read('products').map(p=>({...p,inStock:false})));
     write('inventory-confirmed',[{initializedAt:new Date().toISOString()}]);
   }
-  return {read,write,saveOrder(order) {
+  return {read,write,redactExpiredContacts(now=Date.now()) {
+    const result=redactExpiredOrderContacts(read('orders'),now);
+    if(result.changed) write('orders',result.orders);
+    return result.changed;
+  },saveOrder(order) {
     const all=read('orders'), i=all.findIndex(o=>o.id===order.id);
     if (i<0) all.unshift(order); else all[i]=order;
     write('orders',all);

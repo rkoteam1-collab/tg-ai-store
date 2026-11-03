@@ -13,5 +13,7 @@ server/data/promos.json
 server/data/*.tmp
 .env.*
 !.env.example
+deploy/server.env
+deploy/.env
 
 server/data/inventory-confirmed.json

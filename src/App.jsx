@@ -11,11 +11,16 @@ const AdminAuthModal=lazy(()=>import('./components/AdminAuthModal'));
 import ChannelDiscountBanner from './components/ChannelDiscountBanner';
 import Footer from './components/Footer';
 const LegalModal=lazy(()=>import('./components/LegalModal'));
+const LegalDocumentPage=lazy(()=>import('./components/LegalDocumentPage'));
 const ChatPackModal=lazy(()=>import('./components/ChatPackModal'));
 import Toast from './components/Toast';
 import {useStore} from './context/StoreContext';
 import {useTelegram} from './hooks/useTelegram';
-export default function App(){
+import './privacy.css';
+const documentQuery=new URLSearchParams(window.location.search).get('document');
+export const legalDocument=['privacy','privacy-consent'].includes(documentQuery)?documentQuery:null;
+export default function App(){return legalDocument?<Suspense fallback={<div className="loading-notice" role="status">Открываем документ…</div>}><LegalDocumentPage kind={legalDocument}/></Suspense>:<Storefront/>;}
+function Storefront(){
  useTelegram();
  useEffect(()=>{window.aiShopifyBootComplete?.();},[]);
  const {products,connection,refreshCatalog,cartItemCount,cartTotal,setIsCartOpen,isAdminAuthModalOpen,setIsAdminAuthModalOpen,isAdminOpen,isCartOpen,selectedProduct}=useStore();
