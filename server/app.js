@@ -10,7 +10,7 @@ import {webhookSecret,TELEGRAM_WEBHOOK_PATH} from './bot-webhook.js';
 import {CHAT_WEBHOOK_PATH} from './chat/bot.js';
 import {BOOTSTRAP_HASH} from './bootstrap.js';
 import {PRIVACY_CONSENT_VERSION,PRIVACY_CONSENT_TEXT} from '../shared/privacyConsent.js';
-import {PAID_PAYMENT_STATUSES,CLOSED_UNPAID_PAYMENT_STATUSES} from './payment-status.js';
+import {PAID_PAYMENT_STATUSES,CLOSED_UNPAID_PAYMENT_STATUSES,KNOWN_PAYMENT_STATUSES} from './payment-status.js';
 
 function gatewayLink(value) {
   if (typeof value === 'string') {
@@ -21,7 +21,7 @@ function gatewayLink(value) {
   return typeof url==='string' && url.startsWith('https://') ? url : undefined;
 }
 
-export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegramWebhook,chatWebhook}) {
+export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegramWebhook,chatWebhook,reminders}) {
   const app=express(), sessions=new Map(), limits=new Map(), reconciling=new Map();
   app.disable('x-powered-by');
   if (config.TRUST_PROXY_HOPS) app.set('trust proxy',Number(config.TRUST_PROXY_HOPS));
@@ -33,7 +33,7 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
   });
   app.use('/api',(req,res,next)=>{
     const origin=req.get('Origin');
-    if(origin===STATIC_ORIGIN){res.set({'Access-Control-Allow-Origin':origin,'Vary':'Origin','Access-Control-Allow-Methods':'GET, POST, OPTIONS','Access-Control-Allow-Headers':'Content-Type, Authorization, X-Telegram-Init-Data, X-Order-Token, X-Catalog-Revision','Access-Control-Max-Age':'600'});}
+    if(origin===STATIC_ORIGIN){res.set({'Access-Control-Allow-Origin':origin,'Vary':'Origin','Access-Control-Allow-Methods':'GET, POST, OPTIONS','Access-Control-Allow-Headers':'Content-Type, Authorization, X-Telegram-Init-Data, X-Order-Token, X-Catalog-Revision, X-Admin-Catalog','Access-Control-Max-Age':'600'});}
     if(req.method==='OPTIONS')return res.sendStatus(origin===STATIC_ORIGIN?204:403);
     next();
   });
@@ -59,7 +59,26 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
     return res.status(401).json({message:'Войдите в панель управления'});
   }
   function owner(req,order) {const u=user(req);return (u && String(u.id)===String(order.telegramId)) || equalSecret(req.get('X-Order-Token'),order.accessToken);}
-  app.get('/api/health',(req,res)=>res.json({ok:true,release:APP_RELEASE,privacyConsentVersion:PRIVACY_CONSENT_VERSION,botTransport:telegramWebhook?'webhook':'disabled'}));
+  app.get('/api/health',(req,res)=>{res.json({ok:true,release:APP_RELEASE,privacyConsentVersion:PRIVACY_CONSENT_VERSION,orderMode:'manual',remindersEnabled:!!reminders,botTransport:telegramWebhook?'webhook':'disabled'});app.locals.runReminders().catch(()=>console.error('Reminder check failed'));});
+  app.locals.runReminders=async()=>{await reminders?.runDue(reconcile);};
+  app.get('/api/reminders',rate('reminder-status',30),(req,res)=>{
+    const u=user(req);if(!u)return res.status(401).json({message:'Откройте магазин в Telegram'});
+    if(!reminders)return res.status(503).json({message:'Напоминания временно недоступны'});
+    res.json(reminders.status(u.id));
+  });
+  app.post('/api/reminders/consent',rate('reminder-consent',10),(req,res)=>{
+    const u=user(req);if(!u)return res.status(401).json({message:'Откройте магазин в Telegram'});
+    if(!reminders)return res.status(503).json({message:'Напоминания временно недоступны'});
+    if(typeof req.body?.enabled!=='boolean')return res.status(400).json({message:'Укажите настройку напоминания'});
+    try{res.json(reminders.consent(u.id,req.body.enabled,req.body.version));}catch(e){res.status(400).json({message:e.message});}
+  });
+  app.post('/api/reminders/activity',rate('reminder-activity',20),(req,res)=>{
+    const u=user(req);if(!u)return res.status(401).json({message:'Откройте магазин в Telegram'});
+    if(!reminders)return res.status(503).json({message:'Напоминания временно недоступны'});
+    const {sessionId,hasCart}=req.body||{};
+    if(typeof sessionId!=='string'||!/^[a-zA-Z0-9-]{8,100}$/.test(sessionId)||typeof hasCart!=='boolean')return res.status(400).json({message:'Некорректное событие'});
+    res.json(reminders.activity(u.id,sessionId,hasCart));
+  });
   app.get('/api/chat/offer',(req,res)=>{
     res.json({available:false,packTokens:1000000,chatBotUsername:'AIshopifyGPT_bot'});
   });
@@ -74,11 +93,13 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
     const token=opaqueToken(); sessions.set(token,Date.now()+3600000); res.json({success:true,token});
   });
   app.get('/api/admin/config',(req,res)=>res.json({adminId:config.ADMIN_ID||null}));
+  app.get('/api/admin/catalog',admin,(req,res)=>res.json({products:store.read('products'),revision:catalogRevision()}));
   app.post('/api/admin/logout',(req,res)=>{sessions.delete(req.get('Authorization')?.replace(/^Bearer /,''));res.json({success:true});});
   app.post('/api/products',rate('write',30),admin,(req,res)=>{
+    if(req.get('X-Admin-Catalog')!=='complete')return res.status(409).json({message:'Обновите приложение и загрузите полный каталог в админке перед сохранением.'});
     if (!validateProducts(req.body)) return res.status(400).json({message:'Некорректный каталог'});
     if(req.get('X-Catalog-Revision')!==catalogRevision())return res.status(409).json({message:'Каталог уже изменён. Обновите каталог перед сохранением, чтобы не затереть новые правки.'});
-    store.write('products',req.body);res.json({success:true,revision:catalogRevision()});
+    store.write('products',req.body.map(({stock,inStock,...product})=>product));res.json({success:true,revision:catalogRevision()});
   });
   app.post('/api/admin/orders',rate('orders',30),admin,(req,res)=>res.json(store.read('orders').map(({accessToken,...o})=>o)));
   app.get('/api/admin/promos',admin,(req,res)=>res.json(store.read('promos')));
@@ -125,12 +146,12 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
       }
       const existing=store.read('orders');
       if (channelPercent && existing.some(o=>o.channelPercent && String(o.telegramId)===String(u.id) && ['creating','pending','review'].includes(o.status))) return res.status(409).json({message:'У вас уже есть неоплаченный счёт со скидкой'});
-      const available=store.read('products').filter(p=>p.active!==false).map(p=>({...p,stock:p.stock-existing.filter(o=>['creating','pending','review','paid'].includes(o.status)).reduce((s,o)=>s+(o.inventoryReserved ? o.items.filter(i=>i.id===p.id).reduce((q,i)=>q+i.quantity,0):0),0)}));
-      if(!Array.isArray(b.items)||b.items.some(i=>!available.some(p=>p.id===i?.id&&!p.priceOnRequest&&p.inStock&&p.stock>=i.quantity)))return res.status(409).json({message:'Товар закончился или отключён. Обновите каталог. Счёт не создан.'});
+      const available=store.read('products').filter(p=>p.active!==false);
+      if(!Array.isArray(b.items)||b.items.some(i=>!available.some(p=>p.id===i?.id&&!p.priceOnRequest)))return res.status(409).json({message:'Товар отключён или доступен только по запросу. Обновите каталог. Счёт не создан.'});
       const quote=calculateOrder(b.items,available,b.promoCode,channelPercent,store.read('promos'));
       if (Number(b.expectedAmount)!==quote.amount) return res.status(409).json({message:'Цена изменилась. Обновите каталог и проверьте итог.'});
       const createdAt=new Date().toISOString();
-      order={id:`AI-${randomUUID()}`,accessToken:opaqueToken(),...quote,email:b.email.trim(),telegramId:u?.id||null,telegramUsername:typeof u?.username==='string'?u.username:null,status:'creating',inventoryReserved:true,termsVersion:'2026-11-03',privacyConsent:{version:PRIVACY_CONSENT_VERSION,text:PRIVACY_CONSENT_TEXT,textSha256:createHash('sha256').update(PRIVACY_CONSENT_TEXT).digest('hex'),acceptedAt:createdAt},createdAt};
+      order={id:`AI-${randomUUID()}`,accessToken:opaqueToken(),...quote,email:b.email.trim(),telegramId:u?.id||null,telegramUsername:typeof u?.username==='string'?u.username:null,status:'creating',termsVersion:'2026-11-03',privacyConsent:{version:PRIVACY_CONSENT_VERSION,text:PRIVACY_CONSENT_TEXT,textSha256:createHash('sha256').update(PRIVACY_CONSENT_TEXT).digest('hex'),acceptedAt:createdAt},createdAt};
       store.saveOrder(order);
       const client_receipt=buildReceipt(order,config);
       const r=await fetchImpl(gateway,{method:'POST',signal:AbortSignal.timeout(15000),headers:{Authorization:auth(),'Content-Type':'application/json'},body:JSON.stringify({amount:quote.amount.toFixed(2),client_payment_id:order.id,method:'sbp',description:`Заказ ${order.id}`,client_receipt,metadata:{email:order.email,order_id:order.id}})});
@@ -141,7 +162,7 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
       res.json({success:true,orderId:order.id,accessToken:order.accessToken,amount:order.amount,qrUrl,qrImage});
     } catch {
       if (order) {order.status='review';order.statusChangedAt=new Date().toISOString();store.saveOrder(order);return res.status(502).json({message:`Не удалось подтвердить создание счёта. Обратитесь в поддержку с номером ${order.id}, не повторяйте оплату.`});}
-      res.status(400).json({message:'Проверьте корзину, остатки и скидки'});
+      res.status(400).json({message:'Проверьте корзину и скидки'});
     }
   });
   async function reconcile(id) {
@@ -151,7 +172,7 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
       if (!order || !order.itpayId) return order;
       const r=await fetchImpl(`${gateway}/${encodeURIComponent(order.itpayId)}`,{headers:{Authorization:auth()},signal:AbortSignal.timeout(10000)});
       if (!r.ok) throw new Error('Gateway unavailable');const result=await r.json(),p=result.data||result;
-      if (String(p?.id)!==String(order.itpayId) || p?.client_payment_id!==order.id || Math.round(Number(p?.amount)*100)!==Math.round(order.amount*100) || (p.currency && p.currency!=='RUB')) throw new Error('Payment identity mismatch');
+      if (String(p?.id)!==String(order.itpayId) || p?.client_payment_id!==order.id || Math.round(Number(p?.amount)*100)!==Math.round(order.amount*100) || (p.currency && p.currency!=='RUB') || !KNOWN_PAYMENT_STATUSES.includes(p.status)) throw new Error('Payment identity or status mismatch');
       order=store.read('orders').find(o=>o.id===id);
       order.receipts=Array.isArray(p.receipts)?p.receipts.map(r=>({id:r.id,state:r.state,url:gatewayLink(r.link_to_receipt)})):order.receipts||[];
       store.saveOrder(order);

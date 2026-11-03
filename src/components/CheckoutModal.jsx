@@ -18,7 +18,7 @@ export default function CheckoutModal({isOpen,onClose,onOpenLegal}) {
  },[isOpen,invoice,paid]);
  async function submit(e){e.preventDefault();if(busy||invoice||!canCheckout||!accepted||!privacyAccepted)return;setBusy(true);setError('');try{
   const health=await api('/api/health');
-  if(health.privacyConsentVersion!==PRIVACY_CONSENT_VERSION)throw new Error('Сервер обновляется. Подождите несколько минут и откройте магазин через /start заново. Счёт не создан.');
+  if(health.privacyConsentVersion!==PRIVACY_CONSENT_VERSION||health.orderMode!=='manual')throw new Error('Сервер обновляется. Подождите несколько минут и откройте магазин через /start заново. Счёт не создан.');
   const d=await api('/api/payments/create',{method:'POST',body:JSON.stringify({email,acceptOffer:accepted,acceptPrivacyConsent:privacyAccepted,privacyConsentVersion:PRIVACY_CONSENT_VERSION,items:cart.map(({id,quantity})=>({id,quantity})),expectedAmount:cartTotal,promoCode:appliedPromo?.code,channelDiscount:!!channelDiscountApplied})});
   setInvoice(d);sessionStorage.setItem('ai_pending_invoice',JSON.stringify(d));
  }catch(e){setError(e.message);}finally{setBusy(false);}}

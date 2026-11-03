@@ -17,3 +17,5 @@ deploy/server.env
 deploy/.env
 
 server/data/inventory-confirmed.json
+
+server/data/reminders.json

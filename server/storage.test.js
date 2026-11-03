@@ -20,15 +20,26 @@ test('Disk storage retains promo edits across reopen and rejects corrupt data',(
  } finally {fs.rmSync(directory,{recursive:true,force:true});}
 });
 
-test('Fresh ephemeral deployment disables seeded inventory, existing edits survive process reopen',()=>{
+test('Legacy inventory migration keeps owner edits and explicit active:false; fresh deployments remain orderable',()=>{
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'ai-inventory-test-'));
- try{const seed=fileURLToPath(new URL('./data/products.json',import.meta.url));
- const store=createStore(directory,seed,{ephemeralInventory:true});assert(store.read('products').every(p=>p.inStock===false));
- const catalog=store.read('products').map(p=>({...p,inStock:true}));store.write('products',catalog);
- assert(createStore(directory,seed,{ephemeralInventory:true}).read('products').every(p=>p.inStock===true));
- fs.copyFileSync(seed,path.join(directory,'products.json'));fs.unlinkSync(path.join(directory,'inventory-confirmed.json'));
- assert(createStore(directory,seed,{ephemeralInventory:true}).read('products').every(p=>p.inStock===false));
- }finally{fs.rmSync(directory,{recursive:true,force:true});}
+ const fresh=fs.mkdtempSync(path.join(os.tmpdir(),'ai-fresh-test-'));
+ try{
+  const seed=fileURLToPath(new URL('./data/products.json',import.meta.url));
+  const products=JSON.parse(fs.readFileSync(seed,'utf8'));
+  const legacy=products.map((p,i)=>({...p,price:i===0?2290:p.price,stock:0,inStock:false,active:i===0?false:undefined}));
+  fs.writeFileSync(path.join(directory,'products.json'),JSON.stringify(legacy));
+  const store=createStore(directory,seed),migrated=store.read('products');
+  assert.equal(migrated[0].price,2290);
+  assert.equal(migrated[0].active,false);
+  assert(migrated.slice(1).every(p=>p.active===true));
+  assert(migrated.every(p=>!('stock' in p)&&!('inStock' in p)));
+  assert.deepEqual(createStore(directory,seed).read('products'),migrated);
+  assert(createStore(fresh,seed).read('products').filter(p=>!p.priceOnRequest).every(p=>p.active!==false));
+  assert.equal(fs.existsSync(path.join(directory,'inventory-confirmed.json')),false);
+ }finally{
+  fs.rmSync(directory,{recursive:true,force:true});
+  fs.rmSync(fresh,{recursive:true,force:true});
+ }
 });
 
 test('Retention removes old contact details but preserves payment evidence and unresolved orders',()=>{

@@ -1,5 +1,6 @@
 [
   {
+    "active": true,
     "id": "claude-pro",
     "category": "claude",
     "name": "Claude Pro",
@@ -12,8 +13,6 @@
     "originalPrice": 2190,
     "discount": 0,
     "isDiscountActive": false,
-    "stock": 5,
-    "inStock": false,
     "badge": "",
     "duration": "1 месяц",
     "delivery": "Покупка производится через специалиста. После оплаты с вами свяжутся в Telegram на аккаунте, с которого вы приобрели товар. Срок подключения согласуется после оплаты.",
@@ -30,6 +29,7 @@
     "priceSourceUrl": "https://apps.apple.com/tr/app/id6473753684"
   },
   {
+    "active": true,
     "id": "claude-max",
     "category": "claude",
     "name": "Claude Max 5x",
@@ -42,8 +42,6 @@
     "originalPrice": 12080,
     "discount": 0,
     "isDiscountActive": false,
-    "stock": 3,
-    "inStock": false,
     "badge": "",
     "duration": "1 месяц",
     "delivery": "Покупка производится через специалиста. После оплаты с вами свяжутся в Telegram на аккаунте, с которого вы приобрели товар. Срок подключения согласуется после оплаты.",
@@ -60,6 +58,7 @@
     "priceSourceUrl": "https://apps.apple.com/tr/app/id6473753684"
   },
   {
+    "active": true,
     "id": "chatgpt-plus",
     "category": "chatgpt",
     "name": "ChatGPT Plus",
@@ -72,8 +71,6 @@
     "originalPrice": 2190,
     "discount": 0,
     "isDiscountActive": false,
-    "stock": 8,
-    "inStock": false,
     "badge": "",
     "duration": "1 месяц",
     "delivery": "Покупка производится через специалиста. После оплаты с вами свяжутся в Telegram на аккаунте, с которого вы приобрели товар. Срок подключения согласуется после оплаты.",
@@ -90,6 +87,7 @@
     "priceSourceUrl": "https://apps.apple.com/tr/app/id6448311069"
   },
   {
+    "active": true,
     "id": "chatgpt-pro",
     "category": "chatgpt",
     "name": "ChatGPT Pro 200",
@@ -102,8 +100,6 @@
     "originalPrice": 16990,
     "discount": 0,
     "isDiscountActive": false,
-    "stock": 2,
-    "inStock": false,
     "badge": "",
     "duration": "1 месяц",
     "delivery": "Покупка производится через специалиста. После оплаты с вами свяжутся в Telegram на аккаунте, с которого вы приобрели товар. Срок подключения согласуется после оплаты.",
@@ -120,6 +116,7 @@
     "priceSourceUrl": "https://apps.apple.com/tr/app/id6448311069"
   },
   {
+    "active": true,
     "id": "gemini-pro",
     "category": "gemini",
     "name": "Google AI Pro",
@@ -132,8 +129,6 @@
     "originalPrice": 1990,
     "discount": 0,
     "isDiscountActive": false,
-    "stock": 6,
-    "inStock": false,
     "badge": "",
     "duration": "1 месяц",
     "delivery": "Покупка производится через специалиста. После оплаты с вами свяжутся в Telegram на аккаунте, с которого вы приобрели товар. Срок подключения согласуется после оплаты.",
@@ -150,6 +145,7 @@
     "priceSourceUrl": "https://apps.apple.com/tr/app/id6477489729"
   },
   {
+    "active": true,
     "id": "gemini-ultra",
     "category": "gemini",
     "name": "Google AI Ultra 20x",
@@ -162,8 +158,6 @@
     "originalPrice": 0,
     "discount": 0,
     "isDiscountActive": false,
-    "stock": 0,
-    "inStock": false,
     "badge": "",
     "duration": "1 месяц",
     "delivery": "Покупка производится через специалиста. После оплаты с вами свяжутся в Telegram на аккаунте, с которого вы приобрели товар. Срок подключения согласуется после оплаты.",
@@ -180,6 +174,7 @@
     "priceSourceUrl": "https://apps.apple.com/tr/app/id6477489729"
   },
   {
+    "active": true,
     "id": "kimi-pro",
     "category": "kimi",
     "name": "Kimi Pro",
@@ -192,8 +187,6 @@
     "originalPrice": 3790,
     "discount": 0,
     "isDiscountActive": false,
-    "stock": 4,
-    "inStock": false,
     "badge": "",
     "duration": "1 месяц",
     "delivery": "Покупка производится через специалиста. После оплаты с вами свяжутся в Telegram на аккаунте, с которого вы приобрели товар. Срок подключения согласуется после оплаты.",
@@ -210,6 +203,7 @@
     "priceSourceUrl": "https://apps.apple.com/tr/app/id6474233312"
   },
   {
+    "active": true,
     "id": "kimi-max",
     "category": "kimi",
     "name": "Kimi Plus",
@@ -222,8 +216,6 @@
     "originalPrice": 2190,
     "discount": 0,
     "isDiscountActive": false,
-    "stock": 2,
-    "inStock": false,
     "badge": "",
     "duration": "1 месяц",
     "delivery": "Покупка производится через специалиста. После оплаты с вами свяжутся в Telegram на аккаунте, с которого вы приобрели товар. Срок подключения согласуется после оплаты.",

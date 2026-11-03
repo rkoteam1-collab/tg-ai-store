@@ -7,7 +7,7 @@ import {buildReceipt} from './receipt.js';
 import {PRIVACY_CONSENT_VERSION,PRIVACY_CONSENT_TEXT} from '../shared/privacyConsent.js';
 import {CLOSED_UNPAID_PAYMENT_STATUSES} from './payment-status.js';
 
-const product={id:'claude-pro',name:'Claude Pro',price:2790,stock:10,inStock:true,features:[]};
+const product={id:'claude-pro',name:'Claude Pro',price:2790,active:true,features:[]};
 const botToken='test-token-not-real';
 function signed(id=42,age=0){
  const p=new URLSearchParams({auth_date:String(Math.floor(Date.now()/1000)-age),user:JSON.stringify({id})});
@@ -25,7 +25,7 @@ test('Server price wins, discounts round consistently',()=>{
  assert.equal(q.amount,4743);assert.equal(q.items[0].price,2790);
 });
 test('Reject unknown products, duplicate IDs, negative/fractional quantities and unknown promos',()=>{
- for(const items of [[{id:'no',quantity:1}],[{id:product.id,quantity:-1}],[{id:product.id,quantity:1.5}],[{id:product.id,quantity:11}],[{id:product.id,quantity:1},{id:product.id,quantity:1}]])assert.throws(()=>calculateOrder(items,[product]));
+ for(const items of [[{id:'no',quantity:1}],[{id:product.id,quantity:-1}],[{id:product.id,quantity:1.5}],[{id:product.id,quantity:21}],[{id:product.id,quantity:1},{id:product.id,quantity:1}]])assert.throws(()=>calculateOrder(items,[product]));
  assert.throws(()=>calculateOrder([{id:product.id,quantity:1}],[product],'FAKE'));
  assert.equal(validateProducts([{...product,price:-1}]),false);
 });
@@ -60,7 +60,7 @@ test('Health advertises the checkout consent version for split-deploy detection'
  const f=await fixture(t);
  const health=await f.req('/api/health');
  assert.equal(health.status,200);
- assert.equal(health.data.privacyConsentVersion,PRIVACY_CONSENT_VERSION);
+ assert.equal(health.data.privacyConsentVersion,PRIVACY_CONSENT_VERSION);assert.equal(health.data.orderMode,'manual');
 });
 test('Separate privacy consent is required and its exact text/version/time are recorded before payment',async t=>{
  const f=await fixture(t);
@@ -81,6 +81,7 @@ test('Separate privacy consent is required and its exact text/version/time are r
 test('Catalog and orders require server-issued admin session, forged frontend flags do not count',async t=>{
  const f=await fixture(t);
  assert.equal((await f.req('/api/products',[product])).status,401);
+ assert.equal((await f.req('/api/admin/catalog')).status,401);
  assert.equal((await f.req('/api/admin/orders',{})).status,401);
  assert.equal((await f.req('/api/admin/verify',{pin:'test-password-long'})).status,401);
  assert.equal((await f.req('/api/admin/verify',{pin:'test-password-long'},{'X-Telegram-Init-Data':signed(43)})).status,401);
@@ -88,7 +89,10 @@ test('Catalog and orders require server-issued admin session, forged frontend fl
  assert.equal((await f.req('/api/admin/verify',{pin:'7788'},{'X-Telegram-Init-Data':signed()})).status,401);
  const login=await f.req('/api/admin/verify',{pin:'test-password-long'},{'X-Telegram-Init-Data':signed()});
  assert.equal(login.status,200);
- const h={Authorization:'Bearer '+login.data.token,'X-Catalog-Revision':(await f.req('/api/catalog')).data.revision};
+ assert.equal((await f.req('/api/admin/catalog',undefined,{Authorization:'Bearer '+login.data.token})).data.products.length,1);
+ const legacyHeaders={Authorization:'Bearer '+login.data.token,'X-Catalog-Revision':(await f.req('/api/catalog')).data.revision};
+ assert.equal((await f.req('/api/products',[],legacyHeaders)).status,409);assert.equal(f.db.products.length,1);
+ const h={Authorization:'Bearer '+login.data.token,'X-Admin-Catalog':'complete','X-Catalog-Revision':(await f.req('/api/catalog')).data.revision};
  assert.equal((await f.req('/api/products',[product],h)).status,200);
  assert.equal((await f.req('/api/products',[{...product,price:0}],h)).status,400);
  await f.req('/api/admin/logout',{},h);
@@ -100,6 +104,17 @@ test('Client total manipulation and fake identity cannot create underpriced paym
  const created=await f.checkout({...valid,telegramId:42,username:'admin'});
  assert.equal(created.status,200);assert.equal(created.data.amount,2790);assert.equal(f.db.orders[0].telegramId,42);assert.equal(f.db.orders[0].telegramUsername,null);
  assert.equal(f.stats().posts,1);
+});
+test('Legacy zero stock and false inStock do not block manual fulfillment',async t=>{
+ const f=await fixture(t);
+ Object.assign(f.db.products[0],{stock:0,inStock:false});
+ assert.equal((await f.checkout(valid)).status,200);
+ assert.equal(f.stats().posts,1);
+ const login=await f.req('/api/admin/verify',{pin:'test-password-long'},{'X-Telegram-Init-Data':signed()});
+ const revision=(await f.req('/api/catalog')).data.revision;
+ assert.equal((await f.req('/api/products',f.db.products,{Authorization:'Bearer '+login.data.token,'X-Admin-Catalog':'complete','X-Catalog-Revision':revision})).status,200);
+ assert.equal('stock' in f.db.products[0],false);
+ assert.equal('inStock' in f.db.products[0],false);
 });
 test('Order status is private, callback is reconciled against bank, paid notification is idempotent',async t=>{
  const f=await fixture(t),created=(await f.checkout(valid)).data;
@@ -128,9 +143,9 @@ test('Repeated bank cancellation does not reset the contact-retention clock',asy
  await f.req(route,undefined,headers);
  assert.equal(f.db.orders[0].statusChangedAt,first);
 });
-test('Every documented closed-unpaid bank status frees stock, unsupported statuses stay reserved',async t=>{
+test('Closed and unsupported bank statuses never consume a manually fulfilled product',async t=>{
  for(const status of CLOSED_UNPAID_PAYMENT_STATUSES){
-  const f=await fixture(t);f.db.products[0].stock=1;
+  const f=await fixture(t);
   const created=(await f.checkout(valid)).data;
   f.state(status);
   const result=await f.req('/api/payments/status/'+created.orderId,undefined,{'X-Order-Token':created.accessToken});
@@ -138,13 +153,14 @@ test('Every documented closed-unpaid bank status frees stock, unsupported status
   assert.ok(f.db.orders[0].statusChangedAt);
   assert.equal((await f.checkout(valid)).status,200);
  }
- const f=await fixture(t);f.db.products[0].stock=1;
+ const f=await fixture(t);
  const created=(await f.checkout(valid)).data;
  for(const unsupported of ['failed','expired','canceled']){
   f.state(unsupported);
-  assert.equal((await f.req('/api/payments/status/'+created.orderId,undefined,{'X-Order-Token':created.accessToken})).data.status,'pending');
+  assert.equal((await f.req('/api/payments/status/'+created.orderId,undefined,{'X-Order-Token':created.accessToken})).status,503);
+  assert.equal(f.db.orders[0].status,'pending');
  }
- assert.equal((await f.checkout(valid)).status,409);
+ assert.equal((await f.checkout(valid)).status,200);
 });
 test('Subscription checks do not consume discount; completed payment consumes it',async t=>{
  const f=await fixture(t),h={'X-Telegram-Init-Data':signed()};
@@ -155,10 +171,10 @@ test('Subscription checks do not consume discount; completed payment consumes it
  assert.ok(created.orderId);f.state('paid');await f.req('/api/payments/status/'+created.orderId,undefined,h);
  assert.equal((await f.req('/api/check-subscription',{},h)).data.alreadyClaimed,true);
 });
-test('Reserved stock cannot be oversold by concurrent requests',async t=>{
- const f=await fixture(t);f.db.products[0].stock=1;
+test('Concurrent customers can order a manually fulfilled product',async t=>{
+ const f=await fixture(t);
  const replies=await Promise.all([f.checkout(valid),f.checkout(valid)]);
- assert.deepEqual(replies.map(r=>r.status).sort(),[200,409]);assert.equal(f.stats().posts,1);
+ assert.deepEqual(replies.map(r=>r.status).sort(),[200,200]);assert.equal(f.stats().posts,2);
 });
 test('Unknown API route is JSON 404, not SPA success',async t=>{
  const f=await fixture(t);assert.equal((await f.req('/api/unknown')).status,404);
@@ -186,15 +202,19 @@ test('CDN preflight permits only the configured storefront origin',async t=>{
  assert.equal(bad.status,403);assert.equal(bad.headers.get('Access-Control-Allow-Origin'),null);
 });
 
-test('Stale admin cannot restore stock; disabled product never creates a bank invoice',async t=>{
+test('Stale admin cannot re-enable a disabled product; disabled product never creates a bank invoice',async t=>{
  const f=await fixture(t);const login=await f.req('/api/admin/verify',{pin:'test-password-long'},{'X-Telegram-Init-Data':signed()});
  const revision=(await f.req('/api/catalog')).data.revision;
- const headers={Authorization:'Bearer '+login.data.token,'X-Catalog-Revision':revision};
- assert.equal((await f.req('/api/products',[{...product,inStock:false,stock:0}],headers)).status,200);
+ const headers={Authorization:'Bearer '+login.data.token,'X-Admin-Catalog':'complete','X-Catalog-Revision':revision};
+ assert.equal((await f.req('/api/products',[{...product,active:false}],headers)).status,200);
  assert.equal((await f.req('/api/products',[product],headers)).status,409);
  assert.equal((await f.checkout(valid)).status,409);
  assert.equal(f.stats().posts,0);assert.equal(f.db.orders.length,0);
- assert.equal((await f.req('/api/products')).data[0].inStock,false);
+ assert.deepEqual((await f.req('/api/products')).data,[]);
+ const adminCatalog=await f.req('/api/admin/catalog',undefined,{Authorization:headers.Authorization});
+ assert.equal(adminCatalog.data.products[0].active,false);
+ assert.equal((await f.req('/api/products',[product],{...headers,'X-Admin-Catalog':'complete','X-Catalog-Revision':adminCatalog.data.revision})).status,200);
+ assert.equal((await f.checkout(valid)).status,200);
 });
 
 test('Payment requires verified Telegram account regardless of Render flag',async t=>{
@@ -217,17 +237,17 @@ test('Combined discounts cannot lower Max checkout below its configured floor, i
  assert.equal(mixed.amount,14172);assert.equal(validateProducts([{...max,price:9590}]),false);
 });
 
-test('Quote-only products cannot create invoices even if availability is accidentally enabled',async t=>{
- const f=await fixture(t);Object.assign(f.db.products[0],{price:0,minimumPriceRub:0,priceOnRequest:true,inStock:true});
+test('Quote-only products cannot create invoices even when shown in catalog',async t=>{
+ const f=await fixture(t);Object.assign(f.db.products[0],{price:0,minimumPriceRub:0,priceOnRequest:true});
  assert.equal((await f.checkout({...valid,expectedAmount:0})).status,409);
  assert.equal(f.stats().posts,0);assert.equal(f.db.orders.length,0);
  assert.throws(()=>calculateOrder(valid.items,f.db.products));
- assert.equal(validateProducts([{...product,price:0,priceOnRequest:true,inStock:false}]),true);
- assert.equal(validateProducts([{...product,price:0,priceOnRequest:true,inStock:true}]),false);
+ assert.equal(validateProducts([{...product,price:0,priceOnRequest:true}]),true);
+ assert.equal(validateProducts([{...product,price:0,priceOnRequest:true,active:'true'}]),false);
 });
 
 test('Turkish pricing floors protect every reviewed subscription and a mixed order from combined discounts',async()=>{
- const fs=await import('node:fs');const products=JSON.parse(fs.readFileSync(new URL('./data/products.json',import.meta.url),'utf8')).filter(p=>!p.priceOnRequest).map(p=>({...p,inStock:true,stock:20}));
+ const fs=await import('node:fs');const products=JSON.parse(fs.readFileSync(new URL('./data/products.json',import.meta.url),'utf8')).filter(p=>!p.priceOnRequest);
  for(const p of products){const q=calculateOrder([{id:p.id,quantity:2}],products,'VIPAI',5);assert(q.amount>=p.minimumPriceRub*2);assert(q.amount<=p.price*2);}
  const mixed=calculateOrder(products.map(p=>({id:p.id,quantity:1})),products,'VIPAI',5);assert(mixed.amount>=products.reduce((sum,p)=>sum+p.minimumPriceRub,0));
 });

@@ -3,7 +3,7 @@ import {Plus,Minus,ArrowUpRight} from 'lucide-react';
 import BrandLogo from './BrandLogo';
 import {useStore} from '../context/StoreContext';
 export default function ProductCard({product,index=0}) {
- const {cart,addToCart,removeFromCart,setSelectedProduct}=useStore();
+ const {cart,addToCart,removeFromCart,setSelectedProduct,connection}=useStore();
  const quantity=cart.find(i=>i.id===product.id)?.quantity||0;
  return <article className="product-card" style={{'--delay':Math.min(index,7)*55+'ms'}}>
    <button className="product-open" onClick={()=>setSelectedProduct(product)} aria-label={'Подробнее: '+product.name}>
@@ -12,7 +12,7 @@ export default function ProductCard({product,index=0}) {
      <p className="card-caption">{product.tagline}</p>
    </button>
    <div className="card-bottom"><div><strong>{product.priceOnRequest?'Цена по запросу':product.price.toLocaleString('ru-RU')+' ₽'}</strong><small>/ {product.duration}</small></div>
-   {!product.priceOnRequest&&product.inStock&&product.stock>0 ? quantity ? <div className="quantity"><button aria-label={'Убрать '+product.name} onClick={()=>removeFromCart(product.id)}><Minus size={15}/></button><span>{quantity}</span><button aria-label={'Добавить '+product.name} onClick={()=>addToCart(product)}><Plus size={15}/></button></div> : <button className="add-button" aria-label={'В корзину: '+product.name} onClick={()=>addToCart(product)}><Plus size={21}/></button> : <button className="availability" onClick={()=>setSelectedProduct(product)}>Уточнить</button>}
+   {!product.priceOnRequest&&product.active!==false ? quantity ? <div className="quantity"><button aria-label={'Убрать '+product.name} onClick={()=>removeFromCart(product.id)}><Minus size={15}/></button><span>{quantity}</span><button aria-label={'Добавить '+product.name} onClick={()=>addToCart(product)}><Plus size={15}/></button></div> : <button disabled={connection!=='ready'} className="add-button" aria-label={'В корзину: '+product.name} onClick={()=>addToCart(product)}><Plus size={21}/></button> : <button className="availability" onClick={()=>setSelectedProduct(product)}>Уточнить</button>}
    </div>
  </article>;
 }

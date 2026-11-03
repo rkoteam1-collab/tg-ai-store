@@ -9,10 +9,11 @@ import {webhookSecret,TELEGRAM_WEBHOOK_PATH} from './bot-webhook.js';
 import {createChatLedger} from './chat/ledger.js';
 import {createChatBot,CHAT_WEBHOOK_PATH} from './chat/bot.js';
 import {providerConfigured} from './chat/providers.js';
+import {createReminders,pruneReminderRecords} from './reminders.js';
 const root=path.dirname(fileURLToPath(import.meta.url)), config=process.env;
-const store=createStore(path.resolve(config.DATA_DIR||path.join(root,'data')),path.join(root,'data/products.json'),{ephemeralInventory:config.RENDER==='true'});
+const store=createStore(path.resolve(config.DATA_DIR||path.join(root,'data')),path.join(root,'data/products.json'));
 function maintainPrivacy(){
-  try {store.redactExpiredContacts();} catch(error) {console.error('Order contact retention failed',error.message);}
+  try {store.redactExpiredContacts();pruneReminderRecords(store);} catch(error) {console.error('Order contact retention failed',error.message);}
 }
 maintainPrivacy();
 const privacyTimer=setInterval(maintainPrivacy,24*60*60*1000);
@@ -30,7 +31,10 @@ const telegramWebhook=bot&&config.BOT_ENABLED!=='false'&&config.BOT_TRANSPORT!==
 const chatModelsReady=['openai','claude','gemini'].every(provider=>providerConfigured(provider,config));
 const chatBot=chatLedger&&config.CHAT_BOT_TOKEN&&(config.CHAT_DEMO_MODE==='true'||chatModelsReady)?createChatBot({token:config.CHAT_BOT_TOKEN,ledger:chatLedger,config}):null;
 const chatWebhook=chatBot&&config.CHAT_BOT_TRANSPORT!=='polling'?chatBot.webhookCallback(CHAT_WEBHOOK_PATH,{secretToken:webhookSecret(config.CHAT_BOT_TOKEN)}):undefined;
-const app=createApp({config,store,telegram:bot?.telegram,distPath:path.join(root,'../dist'),telegramWebhook,chatWebhook});
+const reminders=bot&&config.BOT_ENABLED!=='false'?createReminders({config,store,telegram:bot.telegram}):null;
+const app=createApp({config,store,telegram:bot?.telegram,distPath:path.join(root,'../dist'),telegramWebhook,chatWebhook,reminders});
+const reminderTimer=setInterval(()=>app.locals.runReminders().catch(()=>console.error('Reminder check failed')),60000);
+reminderTimer.unref();
 const server=app.listen(Number(config.PORT||3000),'0.0.0.0',()=>console.log(`AIshopify listening on ${config.PORT||3000}`));
 let shuttingDown=false;
 if (bot && config.BOT_ENABLED!=='false') {
@@ -38,6 +42,8 @@ if (bot && config.BOT_ENABLED!=='false') {
   bot.start(ctx=>startStore(ctx,config));
   bot.command(['shop','help'],ctx=>startStore(ctx,config));
   bot.command('myid',ctx=>ctx.reply(String(ctx.from.id)));
+  bot.command('stop_reminders',ctx=>{reminders?.consent(ctx.from.id,false);return ctx.reply('Напоминания AIshopify отключены.');});
+  bot.action('reminders_off',async ctx=>{reminders?.consent(ctx.from.id,false);await ctx.answerCbQuery('Напоминания отключены');await ctx.editMessageReplyMarkup({inline_keyboard:[]}).catch(()=>{});});
   bot.command('paysupport',ctx=>ctx.reply('По вопросам оплаты и возврата: @MaximRkoTeam. Укажите номер заказа. Не отправляйте пароли или данные банковской карты.'));
   bot.catch(()=>console.error('Telegram update failed'));
   async function connect(){
@@ -67,6 +73,7 @@ if(chatBot){
 for (const signal of ['SIGINT','SIGTERM']) process.once(signal,()=>{
   shuttingDown=true;
   clearInterval(privacyTimer);
+  clearInterval(reminderTimer);
   try {if (bot && config.BOT_ENABLED!=='false') bot.stop(signal);} catch {}
   try {chatBot?.stop(signal);} catch {}
   server.close(async()=>{await chatLedger?.close().catch(()=>{});process.exit(0);});

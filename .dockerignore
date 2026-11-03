@@ -14,3 +14,5 @@ server/data/channel_discounts.json
 server/data/promos.json
 server/data/inventory-confirmed.json
 server/data/*.tmp
+
+server/data/reminders.json
