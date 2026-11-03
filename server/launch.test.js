@@ -15,15 +15,18 @@ test('Any private user repairs its own override, repeated updates are cached, gr
  for(const chat of [{id:111,type:'private'},{id:222,type:'private'},{id:111,type:'private'},{id:-1,type:'group'}])await middleware({chat},()=>{nextCalls++;});
  assert.deepEqual(repaired.map(r=>r.chatId),[111,222]);assert(repaired.every(r=>r.menuButton.type==='default'));assert.equal(nextCalls,4);
 });
-test('Start replaces old persistent keyboard with current storefront address',async()=>{
- let markup;await startStore({reply:async(text,extra)=>{markup=extra.reply_markup;}});
- assert.equal(markup.is_persistent,true);assert.equal(markup.resize_keyboard,true);
- assert.equal(markup.keyboard[0][0].text,'Открыть AIshopify');assert.equal(markup.keyboard[0][0].web_app.url,launchUrl());assert.equal(markup.keyboard[1][0].text,'Запасной вход');assert.equal(markup.keyboard[1][0].web_app.url,backupLaunchUrl());assert.notEqual(new URL(markup.keyboard[0][0].web_app.url).origin,new URL(markup.keyboard[1][0].web_app.url).origin);assert(!JSON.stringify(markup).includes('cloudflare'));
+test('Start removes reply keyboard and launches through signed-user inline Mini App buttons',async()=>{
+ const replies=[];await startStore({reply:async(text,extra)=>{replies.push({text,...extra});}});
+ assert.equal(replies.length,2);assert.deepEqual(replies[0].reply_markup,{remove_keyboard:true});
+ const markup=replies[1].reply_markup;assert.equal(markup.keyboard,undefined);
+ assert.equal(markup.inline_keyboard[0][0].text,'Открыть AIshopify');assert.equal(markup.inline_keyboard[0][0].web_app.url,launchUrl());
+ assert.equal(markup.inline_keyboard[1][0].text,'Запасной вход');assert.equal(markup.inline_keyboard[1][0].web_app.url,backupLaunchUrl());
+ assert.notEqual(new URL(markup.inline_keyboard[0][0].web_app.url).origin,new URL(markup.inline_keyboard[1][0].web_app.url).origin);assert(!JSON.stringify(markup).includes('cloudflare'));
 });
 
-test('Start keeps launch buttons without browser diagnostic links',async()=>{
- let text,extra;await startStore({reply:async(t,e)=>{text=t;extra=e;}});
- assert(!text.includes(launchUrl()));assert(!text.includes(backupLaunchUrl()));assert.equal(extra.link_preview_options.is_disabled,true);
- assert(text.includes('отправьте /start ещё раз'));assert(text.includes('«Запасной вход»'));
+test('Start keeps recovery instructions and buttons without browser diagnostic links',async()=>{
+ const replies=[];await startStore({reply:async(text,extra)=>{replies.push({text,...extra});}});
+ assert(!replies[0].text.includes(launchUrl()));assert(!replies[0].text.includes(backupLaunchUrl()));assert.equal(replies[0].link_preview_options.is_disabled,true);
+ assert(replies[0].text.includes('отправьте /start ещё раз'));assert(replies[0].text.includes('«Запасной вход»'));
  assert.equal(backupLaunchUrl({WEBAPP_URL:'https://example.com/'}),'https://example.com/?v='+APP_RELEASE);
 });

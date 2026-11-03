@@ -83,10 +83,10 @@ test('Catalog and orders require server-issued admin session, forged frontend fl
  assert.equal((await f.req('/api/products',[product])).status,401);
  assert.equal((await f.req('/api/admin/catalog')).status,401);
  assert.equal((await f.req('/api/admin/orders',{})).status,401);
- assert.equal((await f.req('/api/admin/verify',{pin:'test-password-long'})).status,401);
- assert.equal((await f.req('/api/admin/verify',{pin:'test-password-long'},{'X-Telegram-Init-Data':signed(43)})).status,401);
- assert.equal((await f.req('/api/admin/verify',{pin:'test-password-long'},{'X-Telegram-Init-Data':signed(42,4000)})).status,401);
- assert.equal((await f.req('/api/admin/verify',{pin:'7788'},{'X-Telegram-Init-Data':signed()})).status,401);
+ const missing=await f.req('/api/admin/verify',{pin:'test-password-long'});assert.equal(missing.status,401);assert.equal(missing.data.code,'TELEGRAM_SESSION_MISSING');
+ const other=await f.req('/api/admin/verify',{pin:'test-password-long'},{'X-Telegram-Init-Data':signed(43)});assert.equal(other.status,403);assert.equal(other.data.code,'ADMIN_ACCOUNT_REQUIRED');
+ const expired=await f.req('/api/admin/verify',{pin:'test-password-long'},{'X-Telegram-Init-Data':signed(42,4000)});assert.equal(expired.status,401);assert.equal(expired.data.code,'TELEGRAM_SESSION_INVALID');
+ const wrongPin=await f.req('/api/admin/verify',{pin:'wrong-test-pin'},{'X-Telegram-Init-Data':signed()});assert.equal(wrongPin.status,401);assert.equal(wrongPin.data.code,'INVALID_ADMIN_PIN');
  const login=await f.req('/api/admin/verify',{pin:'test-password-long'},{'X-Telegram-Init-Data':signed()});
  assert.equal(login.status,200);
  assert.equal((await f.req('/api/admin/catalog',undefined,{Authorization:'Bearer '+login.data.token})).data.products.length,1);

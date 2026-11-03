@@ -86,9 +86,13 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
   app.get('/api/catalog',(req,res)=>res.json({products:store.read('products').filter(p=>p.active!==false),revision:catalogRevision()}));
   app.get('/api/products',(req,res)=>res.json(store.read('products').filter(p=>p.active!==false)));
   app.post('/api/admin/verify',rate('login',5,900000),(req,res)=>{
-    const u=user(req), signed=u && config.ADMIN_ID && String(u.id)===String(config.ADMIN_ID);
+    const raw=req.get('X-Telegram-Init-Data'),u=user(req), signed=u && config.ADMIN_ID && String(u.id)===String(config.ADMIN_ID);
+    if(!raw)return res.status(401).json({success:false,code:'TELEGRAM_SESSION_MISSING',message:'Telegram не передал данные аккаунта. Закройте приложение, отправьте боту /start и откройте магазин новой кнопкой под сообщением.'});
+    if(!u)return res.status(401).json({success:false,code:'TELEGRAM_SESSION_INVALID',message:'Сессия Telegram истекла или не подтверждена. Закройте приложение, отправьте боту /start и откройте магазин новой кнопкой под сообщением.'});
+    if(!signed)return res.status(403).json({success:false,code:'ADMIN_ACCOUNT_REQUIRED',message:'Этот Telegram-аккаунт не назначен владельцем магазина.'});
+    if(!config.ADMIN_PIN||config.ADMIN_PIN.length<4)return res.status(503).json({success:false,code:'ADMIN_PIN_NOT_CONFIGURED',message:'PIN администратора не настроен на сервере.'});
     const pin=config.ADMIN_PIN?.length>=4 && equalSecret(req.body?.pin,config.ADMIN_PIN);
-    if (!signed || !pin) return res.status(401).json({success:false,message:'Откройте магазин через Telegram владельца и проверьте PIN'});
+    if (!pin) return res.status(401).json({success:false,code:'INVALID_ADMIN_PIN',message:'Неверный PIN администратора.'});
     for (const [k,v] of sessions) if (v<=Date.now()) sessions.delete(k);
     const token=opaqueToken(); sessions.set(token,Date.now()+3600000); res.json({success:true,token});
   });
