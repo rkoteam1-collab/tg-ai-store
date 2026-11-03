@@ -37,6 +37,7 @@ export function redactExpiredOrderContacts(orders, now = Date.now()) {
       qrUrl: null,
       qrImage: null,
       privacyConsent: null,
+      buyerConfirmation: null,
       contactRedactedAt: new Date(now).toISOString()
     };
   });

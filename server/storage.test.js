@@ -47,7 +47,7 @@ test('Retention removes old contact details but preserves payment evidence and u
  try {
   const seed=fileURLToPath(new URL('./data/products.json',import.meta.url));
   const store=createStore(directory,seed);
-  const details={email:'buyer@example.com',telegramId:42,telegramUsername:'buyer',accessToken:'private',qrUrl:'https://example.com/qr',privacyConsent:{text:'accepted'},itpayId:'bank-1',amount:2190,items:[{id:'claude-pro',quantity:1}]};
+  const details={email:'buyer@example.com',telegramId:42,telegramUsername:'buyer',accessToken:'private',qrUrl:'https://example.com/qr',privacyConsent:{text:'accepted'},buyerConfirmation:{version:1,state:'sent',messageId:123},itpayId:'bank-1',amount:2190,items:[{id:'claude-pro',quantity:1}]};
   store.saveOrder({id:'paid',...details,status:'paid',paidAt:'2020-04-01T00:00:00.000Z'});
   store.saveOrder({id:'cancelled',...details,status:'cancelled',statusChangedAt:'2025-01-01T00:00:00.000Z'});
   store.saveOrder({id:'rejected',...details,status:'rejected',statusChangedAt:'2025-01-01T00:00:00.000Z'});
@@ -60,7 +60,7 @@ test('Retention removes old contact details but preserves payment evidence and u
   for(const id of ['paid','cancelled','rejected','error']){
     const row=rows.find(o=>o.id===id);
     assert.equal(row.email,null);assert.equal(row.telegramId,null);assert.equal(row.accessToken,null);
-    assert.equal(row.privacyConsent,null);assert.equal(row.itpayId,'bank-1');assert.equal(row.amount,2190);
+    assert.equal(row.privacyConsent,null);assert.equal(row.buyerConfirmation,null);assert.equal(row.itpayId,'bank-1');assert.equal(row.amount,2190);
   }
   assert.equal(rows.find(o=>o.id==='pending').email,'buyer@example.com');
   assert.equal(rows.find(o=>o.id==='legacy').email,'buyer@example.com');

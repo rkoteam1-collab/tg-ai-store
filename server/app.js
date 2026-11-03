@@ -11,6 +11,7 @@ import {CHAT_WEBHOOK_PATH} from './chat/bot.js';
 import {BOOTSTRAP_HASH} from './bootstrap.js';
 import {PRIVACY_CONSENT_VERSION,PRIVACY_CONSENT_TEXT} from '../shared/privacyConsent.js';
 import {PAID_PAYMENT_STATUSES,CLOSED_UNPAID_PAYMENT_STATUSES,KNOWN_PAYMENT_STATUSES} from './payment-status.js';
+import {createPurchaseConfirmations,PURCHASE_CONFIRMATION_VERSION} from './purchase-confirmations.js';
 
 function gatewayLink(value) {
   if (typeof value === 'string') {
@@ -23,6 +24,7 @@ function gatewayLink(value) {
 
 export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegramWebhook,chatWebhook,reminders}) {
   const app=express(), sessions=new Map(), limits=new Map(), reconciling=new Map();
+  const purchaseConfirmations=createPurchaseConfirmations({store,telegram,config});
   app.disable('x-powered-by');
   if (config.TRUST_PROXY_HOPS) app.set('trust proxy',Number(config.TRUST_PROXY_HOPS));
   app.use(compression());
@@ -59,8 +61,8 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
     return res.status(401).json({message:'Войдите в панель управления'});
   }
   function owner(req,order) {const u=user(req);return (u && String(u.id)===String(order.telegramId)) || equalSecret(req.get('X-Order-Token'),order.accessToken);}
-  app.get('/api/health',(req,res)=>{res.json({ok:true,release:APP_RELEASE,privacyConsentVersion:PRIVACY_CONSENT_VERSION,orderMode:'manual',remindersEnabled:!!reminders,botTransport:telegramWebhook?'webhook':'disabled'});app.locals.runReminders().catch(()=>console.error('Reminder check failed'));});
-  app.locals.runReminders=async()=>{await reminders?.runDue(reconcile);};
+  app.get('/api/health',(req,res)=>{res.json({ok:true,release:APP_RELEASE,privacyConsentVersion:PRIVACY_CONSENT_VERSION,orderMode:'manual',remindersEnabled:!!reminders,purchaseConfirmationsEnabled:!!telegram&&config.BOT_ENABLED!=='false',botTransport:telegramWebhook?'webhook':'disabled'});app.locals.runReminders().catch(()=>console.error('Reminder check failed'));});
+  app.locals.runReminders=async()=>{await purchaseConfirmations.flush();await reminders?.runDue(reconcile);};
   app.get('/api/reminders',rate('reminder-status',30),(req,res)=>{
     const u=user(req);if(!u)return res.status(401).json({message:'Откройте магазин в Telegram'});
     if(!reminders)return res.status(503).json({message:'Напоминания временно недоступны'});
@@ -181,9 +183,10 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
       order.receipts=Array.isArray(p.receipts)?p.receipts.map(r=>({id:r.id,state:r.state,url:gatewayLink(r.link_to_receipt)})):order.receipts||[];
       store.saveOrder(order);
       if (PAID_PAYMENT_STATUSES.includes(p.status) && order.status!=='paid') {
-        order.status='paid';order.paidAt=new Date().toISOString();order.statusChangedAt=order.paidAt;store.saveOrder(order);
+        order.status='paid';order.paidAt=new Date().toISOString();order.statusChangedAt=order.paidAt;order.buyerConfirmation={version:PURCHASE_CONFIRMATION_VERSION,state:'pending',createdAt:Date.now()};store.saveOrder(order);
         if (telegram && config.ADMIN_ID) try {await telegram.sendMessage(config.ADMIN_ID,`Оплачен заказ ${order.id}. Сумма ${order.amount} ₽. Покупатель: ${order.telegramUsername?'@'+order.telegramUsername:order.telegramId||'не указан'}; Telegram ID: ${order.telegramId||'не указан'}. Свяжитесь после оплаты; срок подключения согласуется после оплаты. Откройте защищённую панель заказов.`);} catch {console.error('Order notification failed');}
       } else if (order.status!=='paid' && CLOSED_UNPAID_PAYMENT_STATUSES.includes(p.status) && (order.status!==p.status || !order.statusChangedAt)) {order.status=p.status;order.statusChangedAt=new Date().toISOString();store.saveOrder(order);}
+      if(order.status==='paid')try{await purchaseConfirmations.deliver(order.id);}catch{console.error('Buyer confirmation failed');}
       return order;
     })();
     reconciling.set(id,work);try{return await work;}finally{reconciling.delete(id);}

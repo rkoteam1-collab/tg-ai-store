@@ -40,20 +40,20 @@ test('Fiscal allocation sums exactly after discount and does not invent tax sett
 async function fixture(t,extra={}) {
  const db={products:[{...product}],orders:[],channel_discounts:[],promos:[{code:'START',discountPercent:10,active:true}]};
  const store={read:n=>structuredClone(db[n]||[]),write:(n,v)=>{db[n]=structuredClone(v);},saveOrder:o=>{const i=db.orders.findIndex(x=>x.id===o.id);if(i<0)db.orders.push(structuredClone(o));else db.orders[i]=structuredClone(o);}};
- let gatewayStatus='new',wrongAmount=false,posts=0,notifies=0;
+ let gatewayStatus='new',wrongAmount=false,posts=0,notifies=0,buyerNotifies=0,messageId=0;const messages=[];
  const config={BOT_TOKEN:botToken,ADMIN_ID:'42',ADMIN_PIN:'test-password-long',ALFA_SBP_ID:'test',ALFA_SBP_KEY:'test',...extra};
  const fetchImpl=async(url,opts)=>{
   if(opts.method==='POST'){posts++;const b=JSON.parse(opts.body);return {ok:true,json:async()=>({id:'bank-'+posts,amount:b.amount,client_payment_id:b.client_payment_id,payment_qr_urls:{desktop:'https://example.com/pay'},payment_qr_images:'https://example.com/qr.png',status:'new',kassa_connected:true})};}
   const order=db.orders.find(o=>url.endsWith(o.itpayId));
   return {ok:true,json:async()=>({id:order.itpayId,client_payment_id:order.id,amount:wrongAmount?'1.00':order.amount.toFixed(2),currency:'RUB',status:gatewayStatus,receipts:[]})};
  };
- const telegram={getChatMember:async()=>({status:'member'}),sendMessage:async()=>{notifies++;}};
+ const telegram={getChatMember:async()=>({status:'member'}),sendMessage:async(chatId,text,extra)=>{messages.push({chatId,text,extra});if(text.startsWith('Оплачен заказ'))notifies++;else buyerNotifies++;return {message_id:++messageId};}};
  const server=createApp({config,store,telegram,fetchImpl}).listen(0,'127.0.0.1');
  await new Promise(r=>server.once('listening',r));t.after(()=>new Promise(r=>server.close(r)));
  const url='http://127.0.0.1:'+server.address().port;
  async function req(route,body,headers={}){const r=await fetch(url+route,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json',...headers},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,data:await r.json()};}
  async function checkout(body,headers={}){return req('/api/payments/create',body,{'X-Telegram-Init-Data':signed(),...headers});}
- return {url,db,req,checkout,state:(status,mismatch=false)=>{gatewayStatus=status;wrongAmount=mismatch;},stats:()=>({posts,notifies})};
+ return {url,db,req,checkout,state:(status,mismatch=false)=>{gatewayStatus=status;wrongAmount=mismatch;},messages,stats:()=>({posts,notifies,buyerNotifies})};
 }
 const valid={email:'buyer@example.com',acceptOffer:true,acceptPrivacyConsent:true,privacyConsentVersion:PRIVACY_CONSENT_VERSION,expectedAmount:2790,items:[{id:'claude-pro',quantity:1}]};
 test('Health advertises the checkout consent version for split-deploy detection',async t=>{
@@ -101,7 +101,7 @@ test('Catalog and orders require server-issued admin session, forged frontend fl
 test('Client total manipulation and fake identity cannot create underpriced payment',async t=>{
  const f=await fixture(t);
  assert.equal((await f.checkout({...valid,expectedAmount:1,amount:1})).status,409);
- const created=await f.checkout({...valid,telegramId:42,username:'admin'});
+ const created=await f.checkout({...valid,telegramId:9999,username:'admin'});
  assert.equal(created.status,200);assert.equal(created.data.amount,2790);assert.equal(f.db.orders[0].telegramId,42);assert.equal(f.db.orders[0].telegramUsername,null);
  assert.equal(f.stats().posts,1);
 });
@@ -129,7 +129,8 @@ test('Order status is private, callback is reconciled against bank, paid notific
  f.state('paid');
  await Promise.all([f.req('/api/payments/alfa/webhook',{data:{client_payment_id:created.orderId}}),f.req(route,undefined,h)]);
  await f.req('/api/payments/alfa/webhook',{event:'payment.receipt',data:{client_payment_id:created.orderId}});
- assert.equal(f.db.orders[0].status,'paid');assert.equal(f.stats().notifies,1);
+ assert.equal(f.db.orders[0].status,'paid');assert.equal(f.stats().notifies,1);assert.equal(f.stats().buyerNotifies,1);
+ assert.equal(f.db.orders[0].buyerConfirmation.state,'sent');const buyerMessage=f.messages.find(m=>m.text.startsWith('✅ Оплата подтверждена'));assert.equal(buyerMessage.chatId,42);assert.match(buyerMessage.text,/Claude Pro/);assert.match(buyerMessage.text,/Заказ принят в работу/);
  const status=(await f.req(route,undefined,h)).data;
  assert.equal(status.status,'paid');assert.equal(status.email,undefined);assert.equal(status.order,undefined);
 });
