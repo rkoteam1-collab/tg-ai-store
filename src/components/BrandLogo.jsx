@@ -3,12 +3,22 @@ import claudeIcon from '../assets/brands/claude.svg';
 import chatgptIcon from '../assets/brands/chatgpt.svg';
 import geminiIcon from '../assets/brands/gemini.svg';
 import kimiIcon from '../assets/brands/kimi.svg';
+import perplexityIcon from '../assets/brands/perplexity.svg';
+import capcutIcon from '../assets/brands/capcut.svg';
+import grokIcon from '../assets/brands/grok.svg';
+import duolingoIcon from '../assets/brands/duolingo.svg';
+import opencodeIcon from '../assets/brands/opencode.svg';
 
 const icons = {
   claude: claudeIcon,
   chatgpt: chatgptIcon,
   gemini: geminiIcon,
   kimi: kimiIcon,
+  perplexity: perplexityIcon,
+  capcut: capcutIcon,
+  grok: grokIcon,
+  duolingo: duolingoIcon,
+  opencode: opencodeIcon,
 };
 
 export default function BrandLogo({logo, category, brand, className = '', imageUrl, size = 26}) {

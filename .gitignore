@@ -19,3 +19,4 @@ deploy/.env
 server/data/inventory-confirmed.json
 
 server/data/reminders.json
+server/data/catalog-migrations.json

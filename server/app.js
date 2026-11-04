@@ -12,6 +12,7 @@ import {BOOTSTRAP_HASH} from './bootstrap.js';
 import {PRIVACY_CONSENT_VERSION,PRIVACY_CONSENT_TEXT} from '../shared/privacyConsent.js';
 import {PAID_PAYMENT_STATUSES,CLOSED_UNPAID_PAYMENT_STATUSES,KNOWN_PAYMENT_STATUSES} from './payment-status.js';
 import {createPurchaseConfirmations,PURCHASE_CONFIRMATION_VERSION} from './purchase-confirmations.js';
+import {createSocrateCatalog} from './socrate-catalog.js';
 
 function gatewayLink(value) {
   if (typeof value === 'string') {
@@ -25,6 +26,8 @@ function gatewayLink(value) {
 export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegramWebhook,chatWebhook,reminders}) {
   const app=express(), sessions=new Map(), limits=new Map(), reconciling=new Map();
   const purchaseConfirmations=createPurchaseConfirmations({store,telegram,config});
+  const supplierCatalog=createSocrateCatalog({config,fetchImpl});
+  app.locals.syncSupplierCatalog=()=>supplierCatalog.refresh();
   app.disable('x-powered-by');
   if (config.TRUST_PROXY_HOPS) app.set('trust proxy',Number(config.TRUST_PROXY_HOPS));
   app.use(compression());
@@ -61,7 +64,7 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
     return res.status(401).json({message:'Войдите в панель управления'});
   }
   function owner(req,order) {const u=user(req);return (u && String(u.id)===String(order.telegramId)) || equalSecret(req.get('X-Order-Token'),order.accessToken);}
-  app.get('/api/health',(req,res)=>{res.json({ok:true,release:APP_RELEASE,privacyConsentVersion:PRIVACY_CONSENT_VERSION,orderMode:'manual',remindersEnabled:!!reminders,purchaseConfirmationsEnabled:!!telegram&&config.BOT_ENABLED!=='false',botTransport:telegramWebhook?'webhook':'disabled'});app.locals.runReminders().catch(()=>console.error('Reminder check failed'));});
+  app.get('/api/health',(req,res)=>{res.json({ok:true,release:APP_RELEASE,privacyConsentVersion:PRIVACY_CONSENT_VERSION,orderMode:'manual',remindersEnabled:!!reminders,purchaseConfirmationsEnabled:!!telegram&&config.BOT_ENABLED!=='false',supplierCatalog:supplierCatalog.status(),botTransport:telegramWebhook?'webhook':'disabled'});void supplierCatalog.refresh();app.locals.runReminders().catch(()=>console.error('Reminder check failed'));});
   app.locals.runReminders=async()=>{await purchaseConfirmations.flush();await reminders?.runDue(reconcile);};
   app.get('/api/reminders',rate('reminder-status',30),(req,res)=>{
     const u=user(req);if(!u)return res.status(401).json({message:'Откройте магазин в Telegram'});
@@ -85,8 +88,8 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
     res.json({available:false,packTokens:1000000,chatBotUsername:'AIshopifyGPT_bot'});
   });
   const catalogRevision=()=>createHash('sha256').update(JSON.stringify(store.read('products'))).digest('hex');
-  app.get('/api/catalog',(req,res)=>res.json({products:store.read('products').filter(p=>p.active!==false),revision:catalogRevision()}));
-  app.get('/api/products',(req,res)=>res.json(store.read('products').filter(p=>p.active!==false)));
+  app.get('/api/catalog',(req,res)=>res.json({products:supplierCatalog.decorate(store.read('products').filter(p=>p.active!==false)),revision:catalogRevision()}));
+  app.get('/api/products',(req,res)=>res.json(supplierCatalog.decorate(store.read('products').filter(p=>p.active!==false))));
   app.post('/api/admin/verify',rate('login',5,900000),(req,res)=>{
     const raw=req.get('X-Telegram-Init-Data'),u=user(req), signed=u && config.ADMIN_ID && String(u.id)===String(config.ADMIN_ID);
     if(!raw)return res.status(401).json({success:false,code:'TELEGRAM_SESSION_MISSING',message:'Telegram не передал данные аккаунта. Закройте приложение, отправьте боту /start и откройте магазин новой кнопкой под сообщением.'});
@@ -99,13 +102,14 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
     const token=opaqueToken(); sessions.set(token,Date.now()+3600000); res.json({success:true,token});
   });
   app.get('/api/admin/config',(req,res)=>res.json({adminId:config.ADMIN_ID||null}));
-  app.get('/api/admin/catalog',admin,(req,res)=>res.json({products:store.read('products'),revision:catalogRevision()}));
+  app.get('/api/admin/catalog',admin,(req,res)=>res.json({products:supplierCatalog.decorate(store.read('products'),{privateFields:true}),revision:catalogRevision()}));
+  app.get('/api/admin/supplier-status',admin,(req,res)=>res.json(supplierCatalog.status()));
   app.post('/api/admin/logout',(req,res)=>{sessions.delete(req.get('Authorization')?.replace(/^Bearer /,''));res.json({success:true});});
   app.post('/api/products',rate('write',30),admin,(req,res)=>{
     if(req.get('X-Admin-Catalog')!=='complete')return res.status(409).json({message:'Обновите приложение и загрузите полный каталог в админке перед сохранением.'});
     if (!validateProducts(req.body)) return res.status(400).json({message:'Некорректный каталог'});
     if(req.get('X-Catalog-Revision')!==catalogRevision())return res.status(409).json({message:'Каталог уже изменён. Обновите каталог перед сохранением, чтобы не затереть новые правки.'});
-    store.write('products',req.body.map(({stock,inStock,...product})=>product));res.json({success:true,revision:catalogRevision()});
+    store.write('products',req.body.map(({stock,inStock,supplierAvailability,...product})=>product.supplier?{...product,minimumPriceRub:product.price}:product));res.json({success:true,revision:catalogRevision()});
   });
   app.post('/api/admin/orders',rate('orders',30),admin,(req,res)=>res.json(store.read('orders').map(({accessToken,...o})=>o)));
   app.get('/api/admin/promos',admin,(req,res)=>res.json(store.read('promos')));
@@ -156,8 +160,11 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
       if(!Array.isArray(b.items)||b.items.some(i=>!available.some(p=>p.id===i?.id&&!p.priceOnRequest)))return res.status(409).json({message:'Товар отключён или доступен только по запросу. Обновите каталог. Счёт не создан.'});
       const quote=calculateOrder(b.items,available,b.promoCode,channelPercent,store.read('promos'));
       if (Number(b.expectedAmount)!==quote.amount) return res.status(409).json({message:'Цена изменилась. Обновите каталог и проверьте итог.'});
+      const supplierChecks=await supplierCatalog.checkOrder(b.items,available);
+      // Owner edits may have happened while the supplier request was in flight.
+      if(JSON.stringify(available)!==JSON.stringify(store.read('products').filter(p=>p.active!==false)))return res.status(409).json({message:'Каталог изменился. Обновите товары перед оплатой. Счёт не создан.'});
       const createdAt=new Date().toISOString();
-      order={id:`AI-${randomUUID()}`,accessToken:opaqueToken(),...quote,email:b.email.trim(),telegramId:u?.id||null,telegramUsername:typeof u?.username==='string'?u.username:null,status:'creating',termsVersion:'2026-11-03',privacyConsent:{version:PRIVACY_CONSENT_VERSION,text:PRIVACY_CONSENT_TEXT,textSha256:createHash('sha256').update(PRIVACY_CONSENT_TEXT).digest('hex'),acceptedAt:createdAt},createdAt};
+      order={id:`AI-${randomUUID()}`,accessToken:opaqueToken(),...quote,...(supplierChecks.length?{supplierChecks}:{}),email:b.email.trim(),telegramId:u?.id||null,telegramUsername:typeof u?.username==='string'?u.username:null,status:'creating',termsVersion:'2026-11-03',privacyConsent:{version:PRIVACY_CONSENT_VERSION,text:PRIVACY_CONSENT_TEXT,textSha256:createHash('sha256').update(PRIVACY_CONSENT_TEXT).digest('hex'),acceptedAt:createdAt},createdAt};
       store.saveOrder(order);
       const client_receipt=buildReceipt(order,config);
       const r=await fetchImpl(gateway,{method:'POST',signal:AbortSignal.timeout(15000),headers:{Authorization:auth(),'Content-Type':'application/json'},body:JSON.stringify({amount:quote.amount.toFixed(2),client_payment_id:order.id,method:'sbp',description:`Заказ ${order.id}`,client_receipt,metadata:{email:order.email,order_id:order.id}})});
@@ -166,8 +173,9 @@ export function createApp({config,store,telegram,fetchImpl=fetch,distPath,telegr
       if (!p?.id || !/^https:\/\//.test(qrUrl)) throw new Error('Invalid gateway response');
       Object.assign(order,{status:'pending',statusChangedAt:new Date().toISOString(),itpayId:p.id,qrUrl,qrImage,fiscalizationRequested:!!client_receipt,kassaConnected:p.kassa_connected===true});store.saveOrder(order);
       res.json({success:true,orderId:order.id,accessToken:order.accessToken,amount:order.amount,qrUrl,qrImage});
-    } catch {
+    } catch(error) {
       if (order) {order.status='review';order.statusChangedAt=new Date().toISOString();store.saveOrder(order);return res.status(502).json({message:`Не удалось подтвердить создание счёта. Обратитесь в поддержку с номером ${order.id}, не повторяйте оплату.`});}
+      if([409,503].includes(error.status))return res.status(error.status).json({message:error.message});
       res.status(400).json({message:'Проверьте корзину и скидки'});
     }
   });

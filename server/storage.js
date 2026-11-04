@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {redactExpiredOrderContacts} from './privacy-retention.js';
+import {socrateProducts,SOCRATE_PRODUCTS_MIGRATION} from './socrate-products.js';
 // One process, one persistent volume. Corrupt files fail closed.
 export function createStore(directory,seedPath) {
   fs.mkdirSync(directory,{recursive:true});
@@ -24,6 +25,12 @@ export function createStore(directory,seedPath) {
   const products=read('products');
   if(products.some(p=>Object.hasOwn(p,'stock')||Object.hasOwn(p,'inStock')||p.active===undefined)){
     write('products',products.map(({stock,inStock,...product})=>({...product,active:product.active!==false})));
+  }
+  const migrations=read('catalog-migrations');
+  if(!migrations.includes(SOCRATE_PRODUCTS_MIGRATION)){
+    const existing=read('products'),ids=new Set(existing.map(p=>p.id));
+    write('products',[...existing,...socrateProducts.filter(p=>!ids.has(p.id))]);
+    write('catalog-migrations',[...migrations,SOCRATE_PRODUCTS_MIGRATION]);
   }
   const promoSeed=path.join(path.dirname(seedPath),'promos.seed.json');
   if (!fs.existsSync(path.join(directory,'promos.json'))) write('promos',JSON.parse(fs.readFileSync(promoSeed,'utf8')));

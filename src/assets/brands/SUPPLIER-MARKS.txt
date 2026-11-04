@@ -1,0 +1,7 @@
+New supplier marks:
+- perplexity.svg, duolingo.svg, opencode.svg: Simple Icons, CC0-1.0.
+  https://github.com/simple-icons/simple-icons/tree/develop/icons
+  https://github.com/simple-icons/simple-icons/blob/develop/LICENSE.md
+- capcut.svg, grok.svg: Lobe Icons, MIT; full notice in LICENSE-lobe-icons.txt.
+  https://github.com/lobehub/lobe-icons/tree/master/packages/static-svg/icons
+Brand marks identify the respective services; no partnership or endorsement is implied.

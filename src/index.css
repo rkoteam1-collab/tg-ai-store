@@ -40,3 +40,5 @@
 .chat-pack-detail .primary-button:disabled{opacity:.55;cursor:not-allowed;background:#111}
 @media(max-width:600px){.chat-nav-button{width:38px;height:38px;min-height:38px;padding:0}.chat-nav-button span{display:none}.chat-pack-teaser{align-items:flex-start;flex-direction:column;gap:17px;padding:22px 20px;margin-bottom:24px}.chat-pack-teaser h2{font-size:22px}.chat-pack-button{width:100%}.chat-pack-estimates{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.chat-nav-button,.chat-pack-button{transition:none}.chat-pack-button:hover{transform:none}}
+
+.supplier-stock{display:block;font-size:11px;line-height:1.4;color:#555;margin-top:8px}.product-card:has(.supplier-stock) .card-bottom{margin-top:16px}

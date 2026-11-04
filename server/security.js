@@ -27,6 +27,7 @@ export function validateProducts(v) {
   return v.every(p=>{
     if (!p || !/^[a-z0-9-]{1,80}$/.test(p.id) || ids.has(p.id)) return false;
     ids.add(p.id);
+    if(p.supplier!==undefined&&(p.supplier!=='socrate'||!/^g-[1-9][0-9]*$/.test(p.supplierSku)||!Number.isSafeInteger(p.supplierMaxUnitPriceMinor)||p.supplierMaxUnitPriceMinor<1||p.supplierMaxUnitPriceMinor>100000000))return false;
     return (p.priceOnRequest===undefined||typeof p.priceOnRequest==='boolean') && (p.active===undefined||typeof p.active==='boolean') && (p.minimumPriceRub===undefined||(Number.isSafeInteger(p.minimumPriceRub)&&p.minimumPriceRub>=0&&p.minimumPriceRub<=p.price)) && typeof p.name==='string' && p.name.length>0 && p.name.length<=120 && Number.isSafeInteger(p.price) && (p.price>0||(p.priceOnRequest===true&&p.price===0)) && p.price<=1000000 && Array.isArray(p.features) && p.features.length<=20 && p.features.every(f=>typeof f==='string' && f.length<=500) && (!p.imageUrl || /^https:\/\//.test(p.imageUrl)) && (!p.sourceUrl || /^https:\/\//.test(p.sourceUrl));
   });
 }
@@ -52,6 +53,6 @@ export function calculateOrder(items,products,promoCode='',channelPercent=0,prom
   const code=String(promoCode||'').trim().toUpperCase();
   const promo=promos.find(p=>p.code===code&&p.active);
   if (code && !promo) throw new Error('Invalid promo');
-  const totals=cartTotals(lines.map(p=>({...p,minimumPriceRub:products.find(item=>item.id===p.id)?.minimumPriceRub||0})),promo?.discountPercent||0,channelPercent);
+  const totals=cartTotals(lines.map(p=>{const source=products.find(item=>item.id===p.id);return {...p,minimumPriceRub:source?.supplier?source.price:source?.minimumPriceRub||0};}),promo?.discountPercent||0,channelPercent);
   return {items:lines,subtotal:totals.subtotal,amount:totals.amount,promoCode:code||null,channelPercent:totals.channelDiscountAmount>0?channelPercent:0};
 }

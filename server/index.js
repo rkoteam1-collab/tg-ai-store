@@ -33,6 +33,9 @@ const chatBot=chatLedger&&config.CHAT_BOT_TOKEN&&(config.CHAT_DEMO_MODE==='true'
 const chatWebhook=chatBot&&config.CHAT_BOT_TRANSPORT!=='polling'?chatBot.webhookCallback(CHAT_WEBHOOK_PATH,{secretToken:webhookSecret(config.CHAT_BOT_TOKEN)}):undefined;
 const reminders=bot&&config.BOT_ENABLED!=='false'?createReminders({config,store,telegram:bot.telegram}):null;
 const app=createApp({config,store,telegram:bot?.telegram,distPath:path.join(root,'../dist'),telegramWebhook,chatWebhook,reminders});
+void app.locals.syncSupplierCatalog();
+const supplierTimer=setInterval(()=>{void app.locals.syncSupplierCatalog();},30000);
+supplierTimer.unref();
 const reminderTimer=setInterval(()=>app.locals.runReminders().catch(()=>console.error('Reminder check failed')),60000);
 reminderTimer.unref();
 const server=app.listen(Number(config.PORT||3000),'0.0.0.0',()=>console.log(`AIshopify listening on ${config.PORT||3000}`));
@@ -74,6 +77,7 @@ for (const signal of ['SIGINT','SIGTERM']) process.once(signal,()=>{
   shuttingDown=true;
   clearInterval(privacyTimer);
   clearInterval(reminderTimer);
+  clearInterval(supplierTimer);
   try {if (bot && config.BOT_ENABLED!=='false') bot.stop(signal);} catch {}
   try {chatBot?.stop(signal);} catch {}
   server.close(async()=>{await chatLedger?.close().catch(()=>{});process.exit(0);});
