@@ -2,6 +2,7 @@ import React,{lazy,Suspense,useEffect,useMemo,useState} from 'react';
 import {ArrowUpRight,ArrowRight} from 'lucide-react';
 import Header from './components/Header';
 import CategoryFilter from './components/CategoryFilter';
+import {filterCatalog,serviceOptions} from '../shared/catalog-navigation.js';
 import ProductCard from './components/ProductCard';
 const ProductDetailModal=lazy(()=>import('./components/ProductDetailModal'));
 const CartDrawer=lazy(()=>import('./components/CartDrawer'));
@@ -25,16 +26,18 @@ function Storefront(){
  useTelegram();
  useEffect(()=>{window.aiShopifyBootComplete?.();},[]);
  const {products,connection,refreshCatalog,cartItemCount,cartTotal,setIsCartOpen,isAdminAuthModalOpen,setIsAdminAuthModalOpen,isAdminOpen,isCartOpen,selectedProduct}=useStore();
- const [category,setCategory]=useState('all'),[search,setSearch]=useState(''),[checkout,setCheckout]=useState(false),[legal,setLegal]=useState(null),[paused,setPaused]=useState(false),[chatPackOpen,setChatPackOpen]=useState(false);
+ const [type,setType]=useState('activation'),[category,setCategory]=useState('all'),[search,setSearch]=useState(''),[checkout,setCheckout]=useState(false),[legal,setLegal]=useState(null),[paused,setPaused]=useState(false),[chatPackOpen,setChatPackOpen]=useState(false);
  const [hidden,setHidden]=useState(document.hidden);
  useEffect(()=>{const update=()=>setHidden(document.hidden);document.addEventListener('visibilitychange',update);return()=>document.removeEventListener('visibilitychange',update);},[]);
  const motionStopped=paused||hidden||checkout||legal||chatPackOpen||isAdminOpen||isAdminAuthModalOpen||isCartOpen||!!selectedProduct;
- const filtered=useMemo(()=>products.filter(p=>(category==='all'||(category==='other'?!['claude','chatgpt','gemini','kimi'].includes(p.category):p.category===category))&&[p.name,p.model,p.brand,p.tagline].join(' ').toLowerCase().includes(search.trim().toLowerCase())),[products,category,search]);
+ const services=useMemo(()=>serviceOptions(products,type),[products,type]);
+ const filtered=useMemo(()=>filterCatalog(products,{type,category,search}),[products,type,category,search]);
+ function selectType(next){setType(next);setCategory('all');}
  return <div className={'store-shell '+(motionStopped?'motion-paused':'')}><a className="skip-link" href="#catalog">Перейти к каталогу</a><div className="ambient" aria-hidden="true">{Array.from({length:6},(_,i)=><i key={i} style={{left:(i*37%100)+'%',top:(i*23%100)+'%',animationDelay:-i*2+'s'}}/>)}</div>
  <Header paused={paused} onToggleMotion={()=>setPaused(v=>!v)} onOpenChat={()=>setChatPackOpen(true)}/><Toast/>
  <main className="store-main"><section className="hero"><div className="hero-copy"><h1>Ваш следующий<br/><em>инструмент.</em></h1><p>Подписки на ИИ для работы,<br className="desktop-break"/> идей и исследований.</p><a href="#catalog" className="hero-link">Найти своё <ArrowRight size={18}/></a></div><div className="orbit-art" aria-hidden="true"><div className="orbit-core">{Array.from({length:7},(_,i)=><span key={i} style={{'--angle':i*25+'deg'}}/>)}</div><i className="orbit-dot"/></div></section>
  <section className="chat-pack-teaser" aria-labelledby="chat-pack-title"><div><span className="chat-pack-eyebrow">Скоро · новый продукт</span><h2 id="chat-pack-title">AIshopify Chat</h2><p>GPT, Claude и Gemini в одном чате. Пакет на 1 000 000 токенов готовится к запуску.</p></div><button type="button" className="chat-pack-button" onClick={()=>setChatPackOpen(true)}>Посмотреть пакет <ArrowUpRight size={17}/></button></section>
- <section id="catalog">{connection!=='ready'&&<div className="connection-status" role="status">{connection==='connecting'?'Соединяемся с сервером. Каталог уже можно смотреть.':'Сервер пока недоступен. Цены и условия требуют обновления.'}{connection==='offline'&&<button className="text-button" onClick={refreshCatalog}>Повторить</button>}</div>}<div className="catalog-heading"><h2>Каталог</h2><span>Подписки, аккаунты и коды</span></div><CategoryFilter selectedCategory={category} onSelectCategory={setCategory} searchQuery={search} onSearchChange={setSearch}/>
+ <section id="catalog">{connection!=='ready'&&<div className="connection-status" role="status">{connection==='connecting'?'Соединяемся с сервером. Каталог уже можно смотреть.':'Сервер пока недоступен. Цены и условия требуют обновления.'}{connection==='offline'&&<button className="text-button" onClick={refreshCatalog}>Повторить</button>}</div>}<div className="catalog-heading"><h2>Каталог</h2><span>Подписки, аккаунты и коды</span></div><CategoryFilter selectedType={type} onSelectType={selectType} services={services} selectedCategory={category} onSelectCategory={setCategory} searchQuery={search} onSearchChange={setSearch}/>
  <div className="product-grid">{filtered.map((p,i)=><ProductCard key={p.id} product={p} index={i}/>)}{!filtered.length&&<div className="empty-state wide"><h3>Ничего не найдено</h3><button className="outline-button" onClick={()=>{setCategory('all');setSearch('');}}>Сбросить фильтры</button></div>}
  <a className="custom-card" href="https://t.me/MaximRkoTeam" target="_blank" rel="noreferrer"><div className="custom-symbol">↗</div><div><h3>Другой сервис</h3><p>Не нашли нужный инструмент?<br/>Обсудим задачу и условия подключения.</p><span>Обсудить задачу <ArrowUpRight size={15}/></span></div><ArrowUpRight className="custom-arrow" size={24}/></a></div><p className="catalog-note">Модели и лимиты зависят от региона и аккаунта. Источники и условия — в карточках.</p><ChannelDiscountBanner/></section></main>
  <ReminderPreference/><Footer onOpenLegal={setLegal}/>{cartItemCount>0&&!checkout&&<button className="floating-cart" onClick={()=>setIsCartOpen(true)}><span>Корзина · {cartItemCount}</span><strong>{cartTotal.toLocaleString('ru-RU')} ₽</strong><ArrowRight size={18}/></button>}
