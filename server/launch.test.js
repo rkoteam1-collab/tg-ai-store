@@ -21,6 +21,7 @@ test('Start removes reply keyboard and launches through signed-user inline Mini 
  const markup=replies[1].reply_markup;assert.equal(markup.keyboard,undefined);
  assert.equal(markup.inline_keyboard[0][0].text,'Открыть AIshopify');assert.equal(markup.inline_keyboard[0][0].web_app.url,launchUrl());
  assert.equal(markup.inline_keyboard[1][0].text,'Запасной вход');assert.equal(markup.inline_keyboard[1][0].web_app.url,backupLaunchUrl());
+ assert.equal(markup.inline_keyboard[2][0].text,'Уведомления');assert.equal(markup.inline_keyboard[2][0].callback_data,'reminders_settings');
  assert.notEqual(new URL(markup.inline_keyboard[0][0].web_app.url).origin,new URL(markup.inline_keyboard[1][0].web_app.url).origin);assert(!JSON.stringify(markup).includes('cloudflare'));
 });
 

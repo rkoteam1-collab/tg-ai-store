@@ -11,7 +11,7 @@ const AdminPanel=lazy(()=>import('./components/AdminPanel'));
 const AdminAuthModal=lazy(()=>import('./components/AdminAuthModal'));
 import ChannelDiscountBanner from './components/ChannelDiscountBanner';
 import Footer from './components/Footer';
-import ReminderPreference from './components/ReminderPreference';
+import ReminderActivity from './components/ReminderActivity';
 const LegalModal=lazy(()=>import('./components/LegalModal'));
 const LegalDocumentPage=lazy(()=>import('./components/LegalDocumentPage'));
 const ChatPackModal=lazy(()=>import('./components/ChatPackModal'));
@@ -40,6 +40,6 @@ function Storefront(){
  <section id="catalog">{connection!=='ready'&&<div className="connection-status" role="status">{connection==='connecting'?'Соединяемся с сервером. Каталог уже можно смотреть.':'Сервер пока недоступен. Цены и условия требуют обновления.'}{connection==='offline'&&<button className="text-button" onClick={refreshCatalog}>Повторить</button>}</div>}<div className="catalog-heading"><h2>Каталог</h2><span>Подписки, аккаунты и коды</span></div><CategoryFilter selectedType={type} onSelectType={selectType} services={services} selectedCategory={category} onSelectCategory={setCategory} searchQuery={search} onSearchChange={setSearch}/>
  <div className="product-grid">{filtered.map((p,i)=><ProductCard key={p.id} product={p} index={i}/>)}{!filtered.length&&<div className="empty-state wide"><h3>Ничего не найдено</h3><button className="outline-button" onClick={()=>{setCategory('all');setSearch('');}}>Сбросить фильтры</button></div>}
  <a className="custom-card" href="https://t.me/MaximRkoTeam" target="_blank" rel="noreferrer"><div className="custom-symbol">↗</div><div><h3>Другой сервис</h3><p>Не нашли нужный инструмент?<br/>Обсудим задачу и условия подключения.</p><span>Обсудить задачу <ArrowUpRight size={15}/></span></div><ArrowUpRight className="custom-arrow" size={24}/></a></div><p className="catalog-note">Модели и лимиты зависят от региона и аккаунта. Источники и условия — в карточках.</p><ChannelDiscountBanner/></section></main>
- <ReminderPreference/><Footer onOpenLegal={setLegal}/>{cartItemCount>0&&!checkout&&<button className="floating-cart" onClick={()=>setIsCartOpen(true)}><span>Корзина · {cartItemCount}</span><strong>{cartTotal.toLocaleString('ru-RU')} ₽</strong><ArrowRight size={18}/></button>}
+ <ReminderActivity/><Footer onOpenLegal={setLegal}/>{cartItemCount>0&&!checkout&&<button className="floating-cart" onClick={()=>setIsCartOpen(true)}><span>Корзина · {cartItemCount}</span><strong>{cartTotal.toLocaleString('ru-RU')} ₽</strong><ArrowRight size={18}/></button>}
  <Suspense fallback={<div className="loading-notice" role="status">Открываем…</div>}>{selectedProduct&&<ProductDetailModal/>}{isCartOpen&&<CartDrawer onProceedToCheckout={()=>{setIsCartOpen(false);setCheckout(true);}}/>}{checkout&&<CheckoutModal isOpen={checkout} onClose={()=>setCheckout(false)} onOpenLegal={setLegal}/>}{legal&&<LegalModal isOpen={!!legal} initialTab={legal||'offer'} onClose={()=>setLegal(null)}/>}{chatPackOpen&&<ChatPackModal onClose={()=>setChatPackOpen(false)}/>}{isAdminOpen&&<AdminPanel/>}{isAdminAuthModalOpen&&<AdminAuthModal isOpen={isAdminAuthModalOpen} onClose={()=>setIsAdminAuthModalOpen(false)}/>}</Suspense></div>;
 }

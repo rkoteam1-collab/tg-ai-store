@@ -1,4 +1,4 @@
-export const APP_RELEASE='20261104.2';
+export const APP_RELEASE='20261104.3';
 export const STATIC_ORIGIN='https://rkoteam1-collab.github.io';
 export function launchUrl(config={}){const url=new URL(config.FRONTEND_URL||'https://rkoteam1-collab.github.io/tg-ai-store/');url.searchParams.set('v',APP_RELEASE);return url.href;}
 export function backupLaunchUrl(config={}){const url=new URL(config.BACKUP_FRONTEND_URL||config.WEBAPP_URL||'https://tg-ai-store.onrender.com/');url.searchParams.set('v',APP_RELEASE);return url.href;}
@@ -28,5 +28,5 @@ export async function startStore(ctx,config={}){
  // keyboard and use inline web_app buttons so checkout/admin get signed user data.
  // https://core.telegram.org/bots/webapps#webappinitdata
  await ctx.reply('AIshopify — каталог подписок и технических услуг.\n\nЕсли приложение зависло или долго не открывается, закройте его, отправьте /start ещё раз и нажмите «Запасной вход».\n\nПоддержка: @MaximRkoTeam.',{link_preview_options:{is_disabled:true},reply_markup:{remove_keyboard:true}});
- return ctx.reply('Откройте магазин кнопкой под этим сообщением:',{reply_markup:{inline_keyboard:[[{text:'Открыть AIshopify',web_app:{url:primary}}],[{text:'Запасной вход',web_app:{url:backup}}]]}});
+ return ctx.reply('Откройте магазин кнопкой под этим сообщением:',{reply_markup:{inline_keyboard:[[{text:'Открыть AIshopify',web_app:{url:primary}}],[{text:'Запасной вход',web_app:{url:backup}}],[{text:'Уведомления',callback_data:'reminders_settings'}]]}});
 }

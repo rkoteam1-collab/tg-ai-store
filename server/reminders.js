@@ -4,6 +4,11 @@ import {launchUrl} from './launch.js';
 
 export const REMINDER_DELAY_MS=2*60*60*1000;
 const DAY=24*60*60*1000;
+export function reminderText(row,invoice){
+ if(invoice){const id=String(invoice.id||'').replace(/[\r\n\t]/g,' ').slice(0,100);return `В AIshopify у вас остался неоплаченный счёт по заказу ${id}. Оплата пока не подтверждена. Если возникла сложность с оплатой, напишите @MaximRkoTeam и укажите номер заказа.`;}
+ if(row.hasCart)return 'В корзине AIshopify остались выбранные позиции. Нужна помощь с условиями или оформлением заказа? Напишите @MaximRkoTeam — поможем разобраться.';
+ return 'Вы недавно смотрели сервисы в AIshopify. Удалось найти нужный вариант? Если остались вопросы по выбору или подключению, напишите @MaximRkoTeam.';
+}
 export function pruneReminderRecords(store,now=Date.now()){
  const rows=store.read('reminders');
  const kept=rows.filter(r=>{const updated=Number(r.updatedAt||r.consent?.acceptedAt);return Number.isFinite(updated)&&now-updated<90*DAY&&r.consent?.expiresAt>now;});
@@ -17,13 +22,14 @@ export function createReminders({store,telegram,config={},clock=Date.now}) {
  function save(row){const rows=read(),index=rows.findIndex(r=>r.telegramId===row.telegramId);if(index<0)rows.push(row);else rows[index]=row;store.write('reminders',rows);}
  const active=row=>row?.consent?.version===REMINDER_CONSENT_VERSION&&!row.revokedAt&&row.consent.expiresAt>clock();
  function status(id){const row=find(id);return {enabled:active(row),pending:active(row)&&row.status==='pending',consentVersion:REMINDER_CONSENT_VERSION};}
- function consent(id,enabled,version){
+ function consent(id,enabled,version,evidence){
   if(!enabled){const row=find(id);if(row)save({...row,revokedAt:clock(),status:'cancelled',updatedAt:clock()});return status(id);}
   if(version!==REMINDER_CONSENT_VERSION)throw new Error('Откройте актуальный текст согласия');
   const rows=read(),old=rows.find(r=>r.telegramId===String(id));
   if(!old&&rows.length>=10000)throw new Error('Напоминания временно недоступны');
   const now=clock(),wasActive=active(old);
-  save({...old,telegramId:String(id),sessionId:wasActive?old.sessionId:null,revokedAt:null,status:wasActive&&old.status==='pending'?'pending':'idle',updatedAt:now,consent:{version:REMINDER_CONSENT_VERSION,text:REMINDER_CONSENT_TEXT,textSha256:createHash('sha256').update(REMINDER_CONSENT_TEXT).digest('hex'),acceptedAt:now,expiresAt:now+90*DAY}});
+  const proof=evidence?.channel==='telegram'&&Number.isSafeInteger(evidence.messageId)&&evidence.messageId>0?{channel:'telegram',messageId:evidence.messageId}:{};
+  save({...old,telegramId:String(id),sessionId:wasActive?old.sessionId:null,revokedAt:null,status:wasActive&&old.status==='pending'?'pending':'idle',updatedAt:now,consent:{version:REMINDER_CONSENT_VERSION,text:REMINDER_CONSENT_TEXT,textSha256:createHash('sha256').update(REMINDER_CONSENT_TEXT).digest('hex'),acceptedAt:now,expiresAt:now+90*DAY,...proof}});
   return status(id);
  }
  function activity(id,sessionId,hasCart){
@@ -53,7 +59,8 @@ export function createReminders({store,telegram,config={},clock=Date.now}) {
     if(!active(row)||row.status!=='pending')continue;
     if(purchased(row)){save({...row,status:'purchased',updatedAt:clock()});continue;}
     if(uncertain)continue; // A missing bank confirmation must never be treated as non-payment.
-    const text=row.hasCart?'Вы оставили услуги в корзине AIshopify. Нужна помощь с выбором или оплатой? Напишите @MaximRkoTeam — поможем разобраться.':'Вы недавно смотрели зарубежные сервисы в AIshopify. Подскажите, удалось найти нужную подписку? Если остались вопросы, напишите @MaximRkoTeam.';
+    const invoice=store.read('orders').find(o=>String(o.telegramId)===row.telegramId&&o.status==='pending'&&o.itpayId);
+    const text=reminderText(row,invoice);
     // Persist claim before network I/O: restart/timeout cannot send a duplicate.
     save({...row,status:'claimed',lastAttemptAt:clock(),updatedAt:clock()});
     try{

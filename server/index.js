@@ -10,6 +10,7 @@ import {createChatLedger} from './chat/ledger.js';
 import {createChatBot,CHAT_WEBHOOK_PATH} from './chat/bot.js';
 import {providerConfigured} from './chat/providers.js';
 import {createReminders,pruneReminderRecords} from './reminders.js';
+import {showReminderSettings,enableReminderSettings} from './reminder-settings.js';
 const root=path.dirname(fileURLToPath(import.meta.url)), config=process.env;
 const store=createStore(path.resolve(config.DATA_DIR||path.join(root,'data')),path.join(root,'data/products.json'));
 function maintainPrivacy(){
@@ -45,6 +46,9 @@ if (bot && config.BOT_ENABLED!=='false') {
   bot.start(ctx=>startStore(ctx,config));
   bot.command(['shop','help'],ctx=>startStore(ctx,config));
   bot.command('myid',ctx=>ctx.reply(String(ctx.from.id)));
+  bot.command(['notifications','reminders'],ctx=>showReminderSettings(ctx,reminders,config));
+  bot.action('reminders_settings',async ctx=>{await ctx.answerCbQuery();return showReminderSettings(ctx,reminders,config);});
+  bot.action(/^reminders_on:/,ctx=>enableReminderSettings(ctx,reminders));
   bot.command('stop_reminders',ctx=>{reminders?.consent(ctx.from.id,false);return ctx.reply('Напоминания AIshopify отключены.');});
   bot.action('reminders_off',async ctx=>{reminders?.consent(ctx.from.id,false);await ctx.answerCbQuery('Напоминания отключены');await ctx.editMessageReplyMarkup({inline_keyboard:[]}).catch(()=>{});});
   bot.command('paysupport',ctx=>ctx.reply('По вопросам оплаты и возврата: @MaximRkoTeam. Укажите номер заказа. Не отправляйте пароли или данные банковской карты.'));
